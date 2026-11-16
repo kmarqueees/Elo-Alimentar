@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  DONOR
+  RECEIVER
+  ADMIN
+}
+
+enum StorageCondition {
+  REFRIGERATED
+  FROZEN
+  DRY
+}
+
+enum FoodType {
+  HORTIFRUTI
+  PANIFICADOS
+  PRATOS_PRONTOS
+  LATICINIOS
+  CARNES
+  NAO_PERECIVEIS
+}
+
+enum BatchStatus {
+  AVAILABLE
+  RESERVED
+  COLLECTED
+  EXPIRED
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  EXPIRED
+  CANCELLED
+}
+
+model User {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  password_hash String
+  role          Role     @default(DONOR)
+  created_at    DateTime @default(now())
+
+  food_batches FoodBatch[]
+  institution  Institution?
+
+  @@map("users")
+}
+
+model Institution {
+  id                    String     @id @default(uuid())
+  name                  String
+  latitude              Float
+  longitude             Float
+  has_refrigeration     Boolean    @default(false)
+  available_capacity_kg Float
+  accepted_food_types   FoodType[]
+  validated             Boolean    @default(false)
+  created_at            DateTime   @default(now())
+
+  user    User?   @relation(fields: [user_id], references: [id])
+  user_id String? @unique
+
+  reservations Reservation[]
+
+  @@map("institutions")
+}
+
+model FoodBatch {
+  id                String           @id @default(uuid())
+  food_type         FoodType
+  quantity_kg       Float
+  expires_at        DateTime
+  storage_condition StorageCondition
+  latitude          Float
+  longitude         Float
+  status            BatchStatus      @default(AVAILABLE)
+  created_at        DateTime         @default(now())
+
+  donor    User   @relation(fields: [donor_id], references: [id])
+  donor_id String
+
+  reservations Reservation[]
+
+  @@index([status, expires_at])
+  @@map("food_batches")
+}
+
+model Reservation {
+  id           String            @id @default(uuid())
+  score        Float
+  status       ReservationStatus @default(PENDING)
+  created_at   DateTime          @default(now())
+  expires_at   DateTime
+  confirmed_at DateTime?
+
+  batch    FoodBatch @relation(fields: [batch_id], references: [id])
+  batch_id String
+
+  institution    Institution @relation(fields: [institution_id], references: [id])
+  institution_id String
+
+  @@index([batch_id])
+  @@index([institution_id])
+  @@map("reservations")
+}

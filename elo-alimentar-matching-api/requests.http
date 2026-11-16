@@ -1,0 +1,118 @@
+@baseUrl = http://localhost:3333
+
+@donorId = 00000000-0000-4000-8000-000000000001
+
+
+### 0. A API está no ar?
+GET {{baseUrl}}/health
+
+
+### A1. Quais lotes estão disponíveis?
+GET {{baseUrl}}/batches
+
+
+### A2. Quais instituições existem (todas validadas pelo administrador)?
+GET {{baseUrl}}/institutions
+
+
+### A3. O diferencial do TCC: as duas estratégias nos mesmos dados
+GET {{baseUrl}}/comparison?now=2026-10-16T12:00:00Z
+
+
+### B1. Cadastrar ONG perto, sem geladeira (nasce NÃO validada: RN03)
+# @name instNear
+POST {{baseUrl}}/institutions
+Content-Type: application/json
+
+{
+  "name": "ONG Perto (sem geladeira)",
+  "latitude": -3.110,
+  "longitude": -60.0217,
+  "hasRefrigeration": false,
+  "availableCapacityKg": 100
+}
+
+
+### B2. Cadastrar ONG longe, com geladeira
+# @name instFar
+POST {{baseUrl}}/institutions
+Content-Type: application/json
+
+{
+  "name": "ONG Longe (com geladeira)",
+  "latitude": -3.083,
+  "longitude": -60.0217,
+  "hasRefrigeration": true,
+  "availableCapacityKg": 100,
+  "acceptedFoodTypes": ["HORTIFRUTI", "LATICINIOS"]
+}
+
+
+### B3. O doador cadastra o lote (validade: daqui a 2 horas)
+# @name batch
+POST {{baseUrl}}/batches
+Content-Type: application/json
+
+{
+  "donorId": "{{donorId}}",
+  "foodType": "HORTIFRUTI",
+  "quantityKg": 18,
+  "expiresAt": "{{$datetime iso8601 2 h}}",
+  "storageCondition": "REFRIGERATED",
+  "latitude": -3.119,
+  "longitude": -60.0217
+}
+
+
+### B4. Matching ANTES de o administrador validar as instituições
+GET {{baseUrl}}/batches/{{batch.response.body.$.batch.id}}/matches
+
+
+### B5. Administrador valida a ONG Perto
+PATCH {{baseUrl}}/institutions/{{instNear.response.body.$.institution.id}}/validate
+
+
+### B6. Administrador valida a ONG Longe
+PATCH {{baseUrl}}/institutions/{{instFar.response.body.$.institution.id}}/validate
+
+
+### B7. Estratégia SOMENTE DISTÂNCIA (como os apps parecidos)
+GET {{baseUrl}}/batches/{{batch.response.body.$.batch.id}}/matches?strategy=distance
+
+
+### B8. Estratégia MULTICRITÉRIO (o diferencial do Elo Alimentar)
+GET {{baseUrl}}/batches/{{batch.response.body.$.batch.id}}/matches?strategy=multicriteria
+
+
+### C1. Lote com validade no passado -> 400
+POST {{baseUrl}}/batches
+Content-Type: application/json
+
+{
+  "donorId": "{{donorId}}",
+  "foodType": "HORTIFRUTI",
+  "quantityKg": 10,
+  "expiresAt": "2020-01-01T00:00:00Z",
+  "storageCondition": "REFRIGERATED",
+  "latitude": -3.119,
+  "longitude": -60.0217
+}
+
+
+### C2. Tipo de alimento inexistente -> 400 (validação)
+POST {{baseUrl}}/batches
+Content-Type: application/json
+
+{
+  "donorId": "{{donorId}}",
+  "foodType": "PIZZA",
+  "quantityKg": 10,
+  "expiresAt": "{{$datetime iso8601 2 h}}",
+  "storageCondition": "DRY",
+  "latitude": -3.119,
+  "longitude": -60.0217
+}
+
+
+### C3. Lote que não existe -> 404
+GET {{baseUrl}}/batches/nao-existe
