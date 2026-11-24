@@ -67,7 +67,7 @@ export function NewBatch({ onCreated, donorId }: NewBatchProps) {
       <div className="screen-frame">
         <form className="form-wrap" onSubmit={submit} noValidate>
           <h2 id="t-new" style={{ fontSize: '1.5rem' }}>Cadastro de doação</h2>
-          <p className="lede" style={{ marginBottom: 24 }}>Registre um lote. Ao cadastrar, você já vê o ranking de instituições.</p>
+          <p className="lede" style={{ marginBottom: 24 }}>Registre uma doação. Ao cadastrar, ela é oferecida automaticamente à instituição mais adequada.</p>
 
           <div className="form-grid">
             <div>

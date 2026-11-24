@@ -1,16 +1,10 @@
 import { useState } from 'react'
-import { getApiUrl, setApiUrl } from '../api'
 import { getFlag, getFontScale, setFlag, setFontScale } from '../prefs'
 
-interface HelpProps {
-  onApiChanged: () => void
-}
-
-export function Help({ onApiChanged }: HelpProps) {
+export function Help() {
   const [hc, setHc] = useState(getFlag('hc'))
   const [motion, setMotion] = useState(getFlag('reduce-motion'))
   const [font, setFont] = useState(getFontScale())
-  const [url, setUrl] = useState(getApiUrl())
 
   return (
     <section aria-labelledby="t-help">
@@ -37,35 +31,25 @@ export function Help({ onApiChanged }: HelpProps) {
                   onClick={() => { setFlag('reduce-motion', !motion); setMotion(!motion) }} />
               </div>
             </div>
-
-            <h2 style={{ fontSize: '1.3rem', margin: '26px 0 14px' }}>Conexão com a API</h2>
-            <div className="api-row">
-              <input aria-label="Endereço da API" value={url} onChange={(e) => setUrl(e.target.value)} />
-              <button className="btn btn-forest btn-sm" onClick={() => { setApiUrl(url); onApiChanged() }}>Salvar e testar</button>
-            </div>
           </div>
 
           <div>
             <h2 style={{ fontSize: '1.3rem', marginBottom: 14 }}>Perguntas frequentes</h2>
             <div className="faq-item">
               <h4>Como sei se meu lote foi aceito?</h4>
-              <p>Na tela “Resultado do matching” você acompanha cada etapa: solicitado pela instituição, aceito pelo doador e retirado.</p>
+              <p>Na tela “Acompanhar lote” você vê para qual instituição o lote está oferecido agora e cada etapa: oferecido, aceito pela instituição e retirado.</p>
             </div>
             <div className="faq-item">
-              <h4>O que acontece se ninguém confirmar a tempo?</h4>
-              <p>A reserva expira, o lote volta a ficar disponível e a próxima instituição do ranking passa a ser a sugestão. Quem foi recusado não volta ao ranking daquele lote.</p>
+              <h4>O que acontece se a instituição não responder a tempo?</h4>
+              <p>Cada instituição tem 30 minutos para aceitar a oferta. Se recusar ou o prazo acabar, o lote é oferecido automaticamente à próxima da fila, e quem recusou não recebe aquele lote de novo. Se a validade passar antes de alguém aceitar, o lote sai de circulação.</p>
             </div>
             <div className="faq-item">
               <h4>Como minha instituição é validada?</h4>
-              <p>Só participam do matching instituições validadas por um administrador.</p>
+              <p>Só recebem ofertas as instituições validadas por um administrador.</p>
             </div>
             <div className="faq-item">
               <h4>Como a pontuação é calculada?</h4>
               <p>Soma ponderada de proximidade (40%), urgência atendida (35%) e compatibilidade (25%). Refrigeração é regra eliminatória, não nota.</p>
-            </div>
-            <div className="faq-item">
-              <h4>Os dados são reais?</h4>
-              <p>Não. Instituições e lotes são sintéticos, gerados para a demonstração do projeto.</p>
             </div>
           </div>
         </div>

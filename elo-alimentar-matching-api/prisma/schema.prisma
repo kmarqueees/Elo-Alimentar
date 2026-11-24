@@ -30,16 +30,20 @@ enum FoodType {
 
 enum BatchStatus {
   AVAILABLE
+  OFFERED
   RESERVED
   COLLECTED
   EXPIRED
 }
 
-enum ReservationStatus {
+/// Status de uma oferta. O tipo no banco mantém o nome antigo ("ReservationStatus").
+enum OfferStatus {
   PENDING
-  CONFIRMED
+  ACCEPTED
   EXPIRED
-  CANCELLED
+  DECLINED
+
+  @@map("ReservationStatus")
 }
 
 model User {
@@ -70,7 +74,7 @@ model Institution {
   user    User?   @relation(fields: [user_id], references: [id])
   user_id String? @unique
 
-  reservations Reservation[]
+  offers Offer[]
 
   @@map("institutions")
 }
@@ -89,19 +93,21 @@ model FoodBatch {
   donor    User   @relation(fields: [donor_id], references: [id])
   donor_id String
 
-  reservations Reservation[]
+  offers Offer[]
 
   @@index([status, expires_at])
   @@map("food_batches")
 }
 
-model Reservation {
-  id           String            @id @default(uuid())
+/// Oferta de um lote a uma instituição (oferta sequencial pelo ranking).
+/// A tabela mantém o nome antigo ("reservations") para não exigir renomeação.
+model Offer {
+  id           String      @id @default(uuid())
   score        Float
-  status       ReservationStatus @default(PENDING)
-  created_at   DateTime          @default(now())
+  status       OfferStatus @default(PENDING)
+  created_at   DateTime    @default(now())
   expires_at   DateTime
-  confirmed_at DateTime?
+  responded_at DateTime?   @map("confirmed_at")
 
   batch    FoodBatch @relation(fields: [batch_id], references: [id])
   batch_id String

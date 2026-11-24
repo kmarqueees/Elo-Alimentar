@@ -1,6 +1,9 @@
-import type { CreateFoodBatchData } from '@/repositories/food-batches-repository'
-import type { CreateInstitutionData } from '@/repositories/institutions-repository'
-import type { FoodType, StorageCondition } from '@/matching/types'
+import { FoodBatch, type RegisterFoodBatchInput } from '@/domain/food-batch/food-batch'
+import {
+  Institution,
+  type RegisterInstitutionInput,
+} from '@/domain/institution/institution'
+import type { FoodType, StorageCondition } from '@/domain/shared/food'
 
 const CENTER = { latitude: -3.119, longitude: -60.0217 }
 const SPREAD_DEG = 0.09
@@ -60,16 +63,39 @@ const FOOD_BY_STORAGE: Record<StorageCondition, FoodType[]> = {
 
 const EXPIRY_HOURS = [1, 2, 3, 6, 12, 24, 48, 72]
 
+export interface ScenarioInstitution extends RegisterInstitutionInput {
+  acceptedFoodTypes: FoodType[]
+  validated: boolean
+}
+
+export type ScenarioBatch = RegisterFoodBatchInput
+
 export interface Scenario {
-  institutions: CreateInstitutionData[]
-  batches: CreateFoodBatchData[]
+  institutions: ScenarioInstitution[]
+  batches: ScenarioBatch[]
+}
+
+/** Cria a instituição pelo fluxo do domínio (cadastro + validação do admin). */
+export function institutionFromScenario(data: ScenarioInstitution) {
+  const institution = Institution.register(data)
+
+  if (data.validated) {
+    institution.validate()
+  }
+
+  return institution
+}
+
+/** Cria o lote pelo fluxo do domínio, como se cadastrado no instante `now`. */
+export function batchFromScenario(data: ScenarioBatch, now: Date = SCENARIO_NOW) {
+  return FoodBatch.register(data, now)
 }
 
 export function generateScenario(seed: number): Scenario {
   const random = makeRandom(seed)
 
-  const institutions: CreateInstitutionData[] = []
-  const batches: CreateFoodBatchData[] = []
+  const institutions: ScenarioInstitution[] = []
+  const batches: ScenarioBatch[] = []
 
   for (let i = 0; i < TOTAL_INSTITUTIONS; i++) {
     institutions.push({

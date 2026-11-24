@@ -1,4 +1,4 @@
-import type { FoodType, StorageCondition, BatchStatus } from './api'
+import type { FoodType, StorageCondition, BatchStatus, OfferStatus } from './api'
 
 export const FOOD_LABEL: Record<FoodType, string> = {
   HORTIFRUTI: 'Hortifruti',
@@ -25,10 +25,19 @@ export const STORAGE_LABEL: Record<StorageCondition, string> = {
 }
 
 export const STATUS_LABEL: Record<BatchStatus, string> = {
-  AVAILABLE: 'Disponível',
-  RESERVED: 'Reservado',
+  AVAILABLE: 'Aguardando instituição',
+  OFFERED: 'Oferecido',
+  RESERVED: 'Aceito — aguardando retirada',
   COLLECTED: 'Retirado',
-  EXPIRED: 'Expirado',
+  EXPIRED: 'Vencido',
+}
+
+/** Status da oferta do ponto de vista da instituição que a recebeu. */
+export const OFFER_LABEL: Record<OfferStatus, string> = {
+  PENDING: 'Aguardando sua resposta',
+  ACCEPTED: 'Aceita por você',
+  DECLINED: 'Recusada por você',
+  EXPIRED: 'Prazo esgotado',
 }
 
 const nf = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 })
@@ -62,4 +71,24 @@ export function formatCountdown(ms: number) {
   const seconds = String(total % 60).padStart(2, '0')
 
   return `${minutes}:${seconds}`
+}
+
+/** Distância em linha reta entre dois pontos, em km (fórmula de haversine). */
+export function distanceKm(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
+  const rad = (deg: number) => (deg * Math.PI) / 180
+  const dLat = rad(b.latitude - a.latitude)
+  const dLng = rad(b.longitude - a.longitude)
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.latitude)) * Math.cos(rad(b.latitude)) * Math.sin(dLng / 2) ** 2
+
+  return 6371 * 2 * Math.asin(Math.sqrt(h))
+}
+
+export function formatDateTimeLong(iso: string) {
+  return new Date(iso).toLocaleString('pt-BR', {
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }

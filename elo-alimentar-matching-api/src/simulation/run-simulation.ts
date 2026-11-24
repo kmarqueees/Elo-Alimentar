@@ -1,13 +1,15 @@
-import { InMemoryFoodBatchesRepository } from '@/repositories/in-memory/in-memory-food-batches-repository'
-import { InMemoryInstitutionsRepository } from '@/repositories/in-memory/in-memory-institutions-repository'
-import { CompareStrategiesUseCase } from '@/use-cases/compare-strategies'
-import { DistanceOnlyStrategy } from '@/matching/strategies/distance-only-strategy'
-import { MultiCriteriaStrategy } from '@/matching/strategies/multi-criteria-strategy'
+import { CompareStrategiesUseCase } from '@/application/evaluation/compare-strategies'
+import { DistanceOnlyStrategy } from '@/domain/matching/strategies/distance-only-strategy'
+import { MultiCriteriaStrategy } from '@/domain/matching/strategies/multi-criteria-strategy'
+import { InMemoryFoodBatchesRepository } from '@/infra/database/in-memory/in-memory-food-batches-repository'
+import { InMemoryInstitutionsRepository } from '@/infra/database/in-memory/in-memory-institutions-repository'
 import {
   SCENARIO_NOW,
   TOTAL_BATCHES,
   TOTAL_INSTITUTIONS,
+  batchFromScenario,
   generateScenario,
+  institutionFromScenario,
 } from './scenario'
 
 async function runScenario(seed: number) {
@@ -16,11 +18,11 @@ async function runScenario(seed: number) {
   const institutionsRepository = new InMemoryInstitutionsRepository()
 
   for (const institution of institutions) {
-    await institutionsRepository.create(institution)
+    await institutionsRepository.create(institutionFromScenario(institution))
   }
 
   for (const batch of batches) {
-    await batchesRepository.create(batch)
+    await batchesRepository.create(batchFromScenario(batch))
   }
 
   const useCase = new CompareStrategiesUseCase(

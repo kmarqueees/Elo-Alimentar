@@ -9,7 +9,7 @@ interface LotsProps {
   title?: string
 }
 
-const ORDER = { AVAILABLE: 0, RESERVED: 1, COLLECTED: 2, EXPIRED: 3 } as const
+const ORDER = { OFFERED: 0, AVAILABLE: 1, RESERVED: 2, COLLECTED: 3, EXPIRED: 4 } as const
 
 export function Lots({ onOpen, onNew, donorId, title = 'Doações cadastradas' }: LotsProps) {
   const { data, error, loading } = useLoad(async () => {
@@ -37,8 +37,8 @@ export function Lots({ onOpen, onNew, donorId, title = 'Doações cadastradas' }
   }, [donorId])
 
   const batches = data?.batches ?? []
-  const available = batches.filter((b) => b.status === 'AVAILABLE').length
-  const reserved = batches.filter((b) => b.status === 'RESERVED').length
+  const inQueue = batches.filter((b) => b.status === 'AVAILABLE' || b.status === 'OFFERED').length
+  const accepted = batches.filter((b) => b.status === 'RESERVED').length
 
   return (
     <section aria-labelledby="t-lots">
@@ -47,7 +47,7 @@ export function Lots({ onOpen, onNew, donorId, title = 'Doações cadastradas' }
           <div className="dash-head">
             <div>
               <h2 id="t-lots" style={{ fontSize: '1.4rem' }}>{title}</h2>
-              <p>{loading ? 'Carregando…' : `${available} disponíveis · ${reserved} reservados · ${batches.length} no total`}</p>
+              <p>{loading ? 'Carregando…' : `${inQueue} na fila de ofertas · ${accepted} aceitos · ${batches.length} no total`}</p>
             </div>
             {onNew && <button className="btn btn-primary" onClick={onNew}>+ Cadastrar novo lote</button>}
           </div>
@@ -68,7 +68,7 @@ export function Lots({ onOpen, onNew, donorId, title = 'Doações cadastradas' }
 
 function LotCard({ batch, best, onOpen }: { batch: Batch; best: number | null | undefined; onOpen: () => void }) {
   const left = hoursLeft(batch.expiresAt)
-  const urgent = batch.status === 'AVAILABLE' && left > 0 && left < 24
+  const urgent = (batch.status === 'AVAILABLE' || batch.status === 'OFFERED') && left > 0 && left < 24
 
   return (
     <div className="lote-card">
@@ -77,7 +77,7 @@ function LotCard({ batch, best, onOpen }: { batch: Batch; best: number | null | 
         <h4>
           {FOOD_LABEL[batch.foodType]} — {num(batch.quantityKg)} kg
           {urgent && <span className="urgent-tag">Validade em {formatHours(left)}</span>}
-          <span className={`status-tag ${batch.status === 'RESERVED' ? 'reserved' : batch.status === 'COLLECTED' ? 'collected' : ''}`}>
+          <span className={`status-tag ${batch.status === 'RESERVED' || batch.status === 'OFFERED' ? 'reserved' : batch.status === 'COLLECTED' ? 'collected' : ''}`}>
             {STATUS_LABEL[batch.status]}
           </span>
         </h4>

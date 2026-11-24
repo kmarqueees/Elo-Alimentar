@@ -14,10 +14,10 @@
     "db:down": "docker compose down",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "tsx src/seed.ts",
+    "db:seed": "tsx src/infra/database/prisma/seed.ts",
     "db:test:prepare": "node scripts/prepare-test-db.mjs",
-    "dev": "tsx watch src/server.ts",
-    "dev:memory": "tsx watch src/server-memory.ts"
+    "dev": "tsx watch src/main/server.ts",
+    "dev:memory": "tsx watch src/main/server-memory.ts"
   },
   "devDependencies": {
     "@types/node": "24.9.1",

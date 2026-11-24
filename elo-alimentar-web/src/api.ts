@@ -6,8 +6,9 @@ export type FoodType =
   | 'CARNES'
   | 'NAO_PERECIVEIS'
 export type StorageCondition = 'REFRIGERATED' | 'FROZEN' | 'DRY'
-export type BatchStatus = 'AVAILABLE' | 'RESERVED' | 'COLLECTED' | 'EXPIRED'
-export type ReservationStatus = 'PENDING' | 'CONFIRMED' | 'EXPIRED' | 'CANCELLED'
+/** AVAILABLE: sem oferta ativa · OFFERED: oferecido, aguardando resposta · RESERVED: aceito */
+export type BatchStatus = 'AVAILABLE' | 'OFFERED' | 'RESERVED' | 'COLLECTED' | 'EXPIRED'
+export type OfferStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED'
 export type StrategyKey = 'multicriteria' | 'distance'
 
 export interface Batch {
@@ -51,33 +52,22 @@ export interface MatchesResponse {
   ranking: RankItem[]
 }
 
-export interface Reservation {
+/** Oferta de um lote a uma instituição (visão do doador, com a nota do ranking). */
+export interface Offer {
   id: string
   batchId: string
   institutionId: string
   score: number
-  status: ReservationStatus
+  status: OfferStatus
   createdAt: string
   expiresAt: string
-  confirmedAt: string | null
+  respondedAt: string | null
 }
 
-export interface StrategySummary {
-  strategy: string
-  collectedBatches: number
-  totalBatches: number
-  collectionRatePercent: number
-  firstChoiceViablePercent: number
-  averageAttempts: number | null
-  averageMinutesToPickup: number | null
-}
-
-export interface ComparisonResponse {
-  baseline: string
-  strategies: StrategySummary[]
-  timeReductionPercent: number | null
-  commonCollectedBatches: number
-  note: string
+/** Visão da instituição: a oferta sem a nota, junto com o lote. */
+export interface InstitutionOffer {
+  offer: Omit<Offer, 'score'>
+  batch: Batch
 }
 
 export interface CreateBatchBody {
@@ -90,23 +80,8 @@ export interface CreateBatchBody {
   longitude: number
 }
 
-export const DEMO_DONOR_ID = '00000000-0000-4000-8000-000000000001'
-
-const DEFAULT_API = import.meta.env.VITE_API_URL ?? 'http://localhost:3333'
-
-export function getApiUrl(): string {
-  try {
-    return (localStorage.getItem('elo.api') ?? DEFAULT_API).replace(/\/$/, '')
-  } catch {
-    return DEFAULT_API
-  }
-}
-
-export function setApiUrl(url: string) {
-  try {
-    localStorage.setItem('elo.api', url.trim() || DEFAULT_API)
-  } catch {}
-}
+/** Endereço da API, definido por VITE_API_URL no build. */
+const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:3333').replace(/\/$/, '')
 
 export class ApiError extends Error {
   constructor(
@@ -118,10 +93,10 @@ export class ApiError extends Error {
 }
 
 const MESSAGES: Record<string, string> = {
-  'Batch is not available for matching.': 'Este lote não está mais disponível (já foi reservado ou retirado).',
-  'Institution is not eligible for this batch.': 'Esta instituição não atende às regras do lote (refrigeração, raio ou validade) ou já foi recusada nele.',
-  'Reservation is not in a state that allows this action.': 'A reserva não está em um estado que permita esta ação.',
-  'Reservation has expired.': 'O prazo de confirmação desta reserva acabou.',
+  'Batch is not available for matching.': 'Este lote não está mais disponível (já foi aceito, retirado ou venceu).',
+  'Offer is not in a state that allows this action.': 'Esta oferta não está em um estado que permita esta ação.',
+  'Offer has expired.': 'O prazo para responder a esta oferta acabou. O lote seguiu para a próxima instituição.',
+  'This offer was made to another institution.': 'Esta oferta foi feita para outra instituição.',
   'Resource not found.': 'Não encontrado.',
   'Batch expiration date must be in the future.': 'A validade precisa ser uma data futura.',
   'Batch quantity must be greater than zero.': 'A quantidade precisa ser maior que zero.',
@@ -131,9 +106,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response
 
   try {
-    response = await fetch(getApiUrl() + path, init)
+    response = await fetch(API_URL + path, init)
   } catch {
-    throw new ApiError('Não consegui falar com a API. Ela está no ar?', 0)
+    throw new ApiError('Não foi possível conectar ao servidor. Tente novamente em instantes.', 0)
   }
 
   const body = (await response.json().catch(() => ({}))) as { message?: string }
@@ -164,17 +139,18 @@ export const api = {
     request<{ institutions: Institution[] }>('/institutions').then((r) => r.institutions),
   matches: (batchId: string, strategy: StrategyKey) =>
     request<MatchesResponse>(`/batches/${batchId}/matches?strategy=${strategy}`),
-  comparison: () => request<ComparisonResponse>('/comparison'),
-  reservations: (batchId: string) =>
-    request<{ reservations: Reservation[] }>(`/batches/${batchId}/reservations`).then(
-      (r) => r.reservations,
+  /** Doador: histórico de ofertas do lote. */
+  batchOffers: (batchId: string) =>
+    request<{ offers: Offer[] }>(`/batches/${batchId}/offers`).then((r) => r.offers),
+  /** Instituição: ofertas que ela recebeu. */
+  institutionOffers: (institutionId: string) =>
+    request<{ offers: InstitutionOffer[] }>(`/institutions/${institutionId}/offers`).then(
+      (r) => r.offers,
     ),
-  reserve: (batchId: string, institutionId: string) =>
-    request<{ reservation: Reservation }>(
-      `/batches/${batchId}/reservations`,
-      json('POST', { institutionId }),
-    ).then((r) => r.reservation),
-  confirm: (id: string) => request(`/reservations/${id}/confirm`, json('PATCH')),
-  reject: (id: string) => request(`/reservations/${id}/reject`, json('PATCH')),
-  pickup: (id: string) => request(`/reservations/${id}/pickup`, json('PATCH')),
+  accept: (offerId: string, institutionId: string) =>
+    request(`/offers/${offerId}/accept`, json('PATCH', { institutionId })),
+  decline: (offerId: string, institutionId: string) =>
+    request(`/offers/${offerId}/decline`, json('PATCH', { institutionId })),
+  pickup: (offerId: string, institutionId: string) =>
+    request(`/offers/${offerId}/pickup`, json('PATCH', { institutionId })),
 }

@@ -11,23 +11,22 @@ import { Matching } from './screens/Matching'
 import { Opportunities } from './screens/Opportunities'
 import { MyReservations } from './screens/MyReservations'
 import { Profile } from './screens/Profile'
-import { Comparison } from './screens/Comparison'
 import { Help } from './screens/Help'
 
 type Tab =
   | 'inicio' | 'login'
   | 'meus-lotes' | 'cadastro' | 'resultado' | 'perfil'
   | 'oportunidades' | 'solicitacoes'
-  | 'comparacao' | 'ajuda'
+  | 'ajuda'
 
 const PUBLIC_TABS: [Tab, string][] = [['inicio', 'Tela inicial'], ['login', 'Login']]
 const DONOR_TABS: [Tab, string][] = [
   ['meus-lotes', 'Meus lotes'], ['cadastro', 'Cadastro de doação'], ['resultado', 'Acompanhar lote'],
-  ['perfil', 'Perfil'], ['comparacao', 'Comparação'], ['ajuda', 'Ajuda e acessibilidade'],
+  ['perfil', 'Perfil'], ['ajuda', 'Ajuda e acessibilidade'],
 ]
 const INSTITUTION_TABS: [Tab, string][] = [
-  ['oportunidades', 'Oportunidades'], ['solicitacoes', 'Minhas solicitações'], ['resultado', 'Detalhe do lote'],
-  ['perfil', 'Perfil'], ['comparacao', 'Comparação'], ['ajuda', 'Ajuda e acessibilidade'],
+  ['oportunidades', 'Ofertas para você'], ['solicitacoes', 'Minhas retiradas'], ['resultado', 'Detalhe do lote'],
+  ['perfil', 'Perfil'], ['ajuda', 'Ajuda e acessibilidade'],
 ]
 
 const tabsFor = (session: Session | null) =>
@@ -92,7 +91,6 @@ export function App() {
     go('resultado')
   }
 
-  const online = !health.error && !health.loading
   const tabs = tabsFor(session)
 
   return (
@@ -124,8 +122,7 @@ export function App() {
       <main id="conteudo" role="tabpanel" aria-labelledby={`tab-${tab}`} tabIndex={-1}>
         {health.error && (
           <div className="banner error" role="alert">
-            <b>Não consegui falar com a API.</b> Suba o back end (<code>npm run dev:memory</code> ou <code>npm run dev</code>, porta 3333) e
-            tente de novo.{' '}
+            <b>Não foi possível conectar ao servidor.</b> Verifique sua conexão e tente novamente em instantes.{' '}
             <button className="btn btn-ghost btn-sm" onClick={() => { void health.reload(); setEpoch((n) => n + 1) }}>Tentar de novo</button>
           </div>
         )}
@@ -140,11 +137,10 @@ export function App() {
         {session?.role === 'institution' && tab === 'solicitacoes' && <MyReservations key={epoch} session={session} onOpen={openBatch} />}
         {session && tab === 'resultado' && <Matching key={epoch} batchId={batchId} onSelect={setBatchId} session={session} />}
         {session && tab === 'perfil' && <Profile session={session} />}
-        {session && tab === 'comparacao' && <Comparison key={epoch} />}
-        {session && tab === 'ajuda' && <Help onApiChanged={() => setEpoch((n) => n + 1)} />}
+        {session && tab === 'ajuda' && <Help />}
       </main>
 
-      <footer>Elo Alimentar — demonstração acadêmica (TCC FAMETRO). Dados sintéticos.</footer>
+      <footer>Elo Alimentar — conectando alimentos a quem precisa.</footer>
     </>
   )
 }

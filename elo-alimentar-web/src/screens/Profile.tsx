@@ -20,13 +20,10 @@ export function Profile({ session }: { session: Session }) {
           </div>
           <div>
             <h2 id="t-profile" style={{ fontSize: '1.5rem' }}>{session.name}</h2>
-            <p className="lede">Dados de demonstração. A edição do perfil entra com o cadastro real.</p>
             <dl>
-              <dt>E-mail</dt><dd>{session.email}</dd>
               {session.role === 'donor' ? (
                 <>
                   <dt>Tipo de conta</dt><dd>Doador (comércio / produtor)</dd>
-                  <dt>Cidade</dt><dd>Manaus, AM</dd>
                 </>
               ) : (
                 <>

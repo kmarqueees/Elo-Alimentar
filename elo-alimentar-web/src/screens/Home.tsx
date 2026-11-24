@@ -1,6 +1,5 @@
 import { api } from '../api'
 import { useLoad } from '../hooks'
-import { num } from '../format'
 import type { Role } from '../session'
 
 interface HomeProps {
@@ -9,11 +8,12 @@ interface HomeProps {
 
 export function Home({ onChoose }: HomeProps) {
   const { data } = useLoad(
-    () => Promise.all([api.listBatches('AVAILABLE'), api.listInstitutions(), api.comparison()]),
+    () => Promise.all([api.listBatches('ALL'), api.listInstitutions()]),
     [],
   )
-  const [batches, institutions, comparison] = data ?? [null, null, null]
-  const reduction = comparison?.timeReductionPercent
+  const [batches, institutions] = data ?? [null, null]
+  const inQueue = batches?.filter((b) => b.status === 'AVAILABLE' || b.status === 'OFFERED').length
+  const collected = batches?.filter((b) => b.status === 'COLLECTED').length
 
   return (
     <section aria-labelledby="t-home">
@@ -31,12 +31,9 @@ export function Home({ onChoose }: HomeProps) {
             </div>
           </div>
           <div className="hero-card" aria-live="polite">
-            <div className="stat"><span>Lotes disponíveis agora</span><b>{batches ? batches.length : '—'}</b></div>
+            <div className="stat"><span>Doações sendo oferecidas agora</span><b>{inQueue ?? '—'}</b></div>
+            <div className="stat"><span>Doações já retiradas</span><b>{collected ?? '—'}</b></div>
             <div className="stat"><span>Instituições parceiras</span><b>{institutions ? institutions.length : '—'}</b></div>
-            <div className="stat">
-              <span>Menos tempo até a retirada (simulação)</span>
-              <b>{reduction == null ? '—' : `${num(reduction)}%`}</b>
-            </div>
           </div>
         </div>
 
@@ -55,8 +52,8 @@ export function Home({ onChoose }: HomeProps) {
             </div>
             <div className="step-card">
               <div className="step-num">3</div>
-              <h3>A instituição solicita e o doador confirma</h3>
-              <p>A instituição reserva o lote e o doador tem um prazo para aceitar. Se recusar ou não responder, o lote segue para a próxima do ranking.</p>
+              <h3>O lote é oferecido em ordem</h3>
+              <p>O sistema oferece o lote à 1ª instituição do ranking, que tem 30 minutos para aceitar. Se recusar ou não responder, o lote segue automaticamente para a próxima.</p>
             </div>
           </div>
 
@@ -67,9 +64,6 @@ export function Home({ onChoose }: HomeProps) {
           </div>
         </div>
       </div>
-      <p className="lede" style={{ marginTop: 14 }}>
-        Dados de demonstração, gerados em torno do centro de Manaus. Os números acima vêm da API em tempo real.
-      </p>
     </section>
   )
 }

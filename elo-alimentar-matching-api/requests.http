@@ -84,6 +84,53 @@ GET {{baseUrl}}/batches/{{batch.response.body.$.batch.id}}/matches?strategy=dist
 GET {{baseUrl}}/batches/{{batch.response.body.$.batch.id}}/matches?strategy=multicriteria
 
 
+### --- OFERTA SEQUENCIAL ---
+### O lote foi cadastrado antes da validação, então ficou AVAILABLE. Em até 15 s
+### a varredura o oferece à 1ª do ranking multicritério (a ONG Longe, que tem
+### geladeira). Lotes cadastrados com instituições já validadas são oferecidos na hora.
+
+
+### D1. Doador: histórico de ofertas do lote (para quem foi oferecido e o que respondeu)
+# @name offers
+GET {{baseUrl}}/batches/{{batch.response.body.$.batch.id}}/offers
+
+
+### D2. ONG Longe: ofertas recebidas (sem nota nem posição no ranking)
+GET {{baseUrl}}/institutions/{{instFar.response.body.$.institution.id}}/offers
+
+
+### D3. ONG Perto (sem geladeira) nunca recebe este lote (RN01)
+GET {{baseUrl}}/institutions/{{instNear.response.body.$.institution.id}}/offers
+
+
+### D4a. ONG Longe ACEITA (prazo: 30 min)
+PATCH {{baseUrl}}/offers/{{offers.response.body.$.offers[0].id}}/accept
+Content-Type: application/json
+
+{ "institutionId": "{{instFar.response.body.$.institution.id}}" }
+
+
+### D4b. ...ou RECUSA: o lote vai na hora para a próxima do ranking (RN08)
+PATCH {{baseUrl}}/offers/{{offers.response.body.$.offers[0].id}}/decline
+Content-Type: application/json
+
+{ "institutionId": "{{instFar.response.body.$.institution.id}}" }
+
+
+### D5. Depois de aceitar, a ONG Longe registra a retirada
+PATCH {{baseUrl}}/offers/{{offers.response.body.$.offers[0].id}}/pickup
+Content-Type: application/json
+
+{ "institutionId": "{{instFar.response.body.$.institution.id}}" }
+
+
+### D6. Outra instituição tentando responder a oferta -> 403
+PATCH {{baseUrl}}/offers/{{offers.response.body.$.offers[0].id}}/accept
+Content-Type: application/json
+
+{ "institutionId": "{{instNear.response.body.$.institution.id}}" }
+
+
 ### C1. Lote com validade no passado -> 400
 POST {{baseUrl}}/batches
 Content-Type: application/json
