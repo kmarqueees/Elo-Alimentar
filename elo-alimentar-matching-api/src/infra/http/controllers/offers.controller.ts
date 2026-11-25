@@ -68,6 +68,7 @@ export function offersController(
     const { offer } = await useCases.completePickup.execute({
       offerId: id,
       institutionId,
+      now: clock(),
     })
 
     return { offer: presentOffer(offer) }

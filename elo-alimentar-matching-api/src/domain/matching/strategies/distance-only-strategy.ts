@@ -31,7 +31,7 @@ export class DistanceOnlyStrategy implements MatchingStrategy {
           score: proximity,
           distanceKm: distance,
           travelMinutes: travelHours(distance, this.config) * 60,
-          criteria: { proximity, urgency: 0, compatibility: 0 },
+          criteria: { proximity, urgency: 0, need: 0, compatibility: 0 },
         }
       })
       .filter((result) => result.distanceKm <= this.config.maxRadiusKm)

@@ -3,6 +3,7 @@ import { api } from './api'
 import { applyPrefs } from './prefs'
 import { useLoad } from './hooks'
 import { loadSession, saveSession, type Role, type Session } from './session'
+import { NotificationBell } from './components/NotificationBell'
 import { Home } from './screens/Home'
 import { Login } from './screens/Login'
 import { Lots } from './screens/Lots'
@@ -100,6 +101,7 @@ export function App() {
       <header className="app-header">
         <div className="brand"><span className="brand-mark">E</span>Elo Alimentar</div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          {session && <NotificationBell key={session.id} session={session} onOpen={openBatch} />}
           {session && (
             <span className="user-chip">
               <span className={`role ${session.role === 'donor' ? 'donor' : ''}`}>{session.role === 'donor' ? 'Doador' : 'Instituição'}</span>

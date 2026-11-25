@@ -1,11 +1,23 @@
 import { AggregateRoot } from '@/core/entities/aggregate-root'
 import { ResourceNotFoundError } from '@/core/errors/resource-not-found-error'
+import { Address, type AddressInput } from '../shared/address'
 import { Coordinates } from '../shared/coordinates'
 import type { FoodType, StorageCondition } from '../shared/food'
 import { BatchAlreadyExpiredError } from './errors/batch-already-expired-error'
 import { BatchNotAvailableError } from './errors/batch-not-available-error'
 import { InvalidBatchQuantityError } from './errors/invalid-batch-quantity-error'
 import { InvalidOfferStateError } from './errors/invalid-offer-state-error'
+import { DonationCollected } from './events/donation-collected'
+import {
+  BatchExpired,
+  OfferAccepted,
+  OfferDeclined,
+  OfferExpired,
+  OfferMade,
+  OfferReminderDue,
+  WaitingForInstitution,
+  type BatchSnapshot,
+} from './events/offer-events'
 import { Offer } from './offer'
 
 /**
@@ -27,6 +39,8 @@ export interface FoodBatchProps {
   expiresAt: Date
   storageCondition: StorageCondition
   coordinates: Coordinates
+  /** Endereço de retirada. null em lotes marcados só pelo mapa. */
+  address: Address | null
   status: BatchStatus
   createdAt: Date
   offers: Offer[]
@@ -40,6 +54,7 @@ export interface RegisterFoodBatchInput {
   storageCondition: StorageCondition
   latitude: number
   longitude: number
+  address?: AddressInput | null | undefined
 }
 
 export interface OfferToInput {
@@ -70,6 +85,7 @@ export class FoodBatch extends AggregateRoot<FoodBatchProps> {
     }
 
     const coordinates = Coordinates.create(input.latitude, input.longitude)
+    const address = input.address ? Address.create(input.address) : null
 
     return new FoodBatch(
       {
@@ -79,6 +95,7 @@ export class FoodBatch extends AggregateRoot<FoodBatchProps> {
         expiresAt: input.expiresAt,
         storageCondition: input.storageCondition,
         coordinates,
+        address,
         status: 'AVAILABLE',
         createdAt: now,
         offers: [],
@@ -122,6 +139,10 @@ export class FoodBatch extends AggregateRoot<FoodBatchProps> {
 
   get longitude() {
     return this.props.coordinates.longitude
+  }
+
+  get address() {
+    return this.props.address
   }
 
   get status() {
@@ -185,8 +206,34 @@ export class FoodBatch extends AggregateRoot<FoodBatchProps> {
 
     this.props.offers.push(offer)
     this.props.status = 'OFFERED'
+    this.addDomainEvent(new OfferMade(this.snapshot(), offer.id, institutionId, offer.expiresAt, now))
 
     return offer
+  }
+
+  /**
+   * Lembra a instituição quando faltam `leadMinutes` para a oferta expirar.
+   * Cada oferta é lembrada uma única vez. Devolve as ofertas lembradas.
+   */
+  remindPendingOffers(now: Date, leadMinutes: number) {
+    const due = this.props.offers.filter((offer) => offer.isReminderDue(now, leadMinutes))
+
+    for (const offer of due) {
+      offer.markReminded(now)
+      this.addDomainEvent(new OfferReminderDue(this.snapshot(), offer.id, offer.institutionId, offer.expiresAt, now))
+    }
+
+    return due
+  }
+
+  /**
+   * O lote ficou sem oferta ativa e nenhuma instituição pode recebê-lo agora.
+   * Chamado por quem tentou oferecer e não encontrou candidata.
+   */
+  reportWaitingForInstitution(now: Date) {
+    if (this.isAvailable) {
+      this.addDomainEvent(new WaitingForInstitution(this.snapshot(), now))
+    }
   }
 
   acceptOffer(offerId: string, institutionId: string, now: Date) {
@@ -194,6 +241,7 @@ export class FoodBatch extends AggregateRoot<FoodBatchProps> {
 
     offer.accept(institutionId, now)
     this.props.status = 'RESERVED'
+    this.addDomainEvent(new OfferAccepted(this.snapshot(), offer.id, institutionId, now))
 
     return offer
   }
@@ -204,6 +252,7 @@ export class FoodBatch extends AggregateRoot<FoodBatchProps> {
 
     offer.decline(institutionId, now)
     this.props.status = 'AVAILABLE'
+    this.addDomainEvent(new OfferDeclined(this.snapshot(), offer.id, institutionId, now))
 
     return offer
   }
@@ -214,6 +263,7 @@ export class FoodBatch extends AggregateRoot<FoodBatchProps> {
 
     for (const offer of overdue) {
       offer.expire()
+      this.addDomainEvent(new OfferExpired(this.snapshot(), offer.id, offer.institutionId, now))
     }
 
     if (overdue.length > 0) {
@@ -234,19 +284,23 @@ export class FoodBatch extends AggregateRoot<FoodBatchProps> {
       return false
     }
 
+    let pendingInstitutionId: string | null = null
+
     for (const offer of this.props.offers) {
       if (offer.isPending) {
         offer.expire()
+        pendingInstitutionId = offer.institutionId
       }
     }
 
     this.props.status = 'EXPIRED'
+    this.addDomainEvent(new BatchExpired(this.snapshot(), pendingInstitutionId, now))
 
     return true
   }
 
-  /** Retirada concluída pela instituição que aceitou. */
-  completePickup(offerId: string, institutionId: string) {
+  /** Retirada concluída pela instituição que aceitou. Gera o evento DonationCollected. */
+  completePickup(offerId: string, institutionId: string, now: Date) {
     const offer = this.getOffer(offerId)
 
     offer.ensureCanBePickedUpBy(institutionId)
@@ -256,8 +310,18 @@ export class FoodBatch extends AggregateRoot<FoodBatchProps> {
     }
 
     this.props.status = 'COLLECTED'
+    this.addDomainEvent(new DonationCollected(this.snapshot(), institutionId, now))
 
     return offer
+  }
+
+  private snapshot(): BatchSnapshot {
+    return {
+      batchId: this.id,
+      donorId: this.props.donorId,
+      foodType: this.props.foodType,
+      quantityKg: this.props.quantityKg,
+    }
   }
 
   private getOffer(offerId: string) {

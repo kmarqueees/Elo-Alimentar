@@ -28,6 +28,12 @@ export class InMemoryFoodBatchesRepository implements FoodBatchesRepository {
     )
   }
 
+  async findManyWithOpenOffers() {
+    return this.items.filter(
+      (item) => item.status === 'OFFERED' || item.status === 'RESERVED',
+    )
+  }
+
   async findManyOfferedTo(institutionId: string) {
     return this.items.filter((item) =>
       item.offers.some((offer) => offer.institutionId === institutionId),

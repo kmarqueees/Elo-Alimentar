@@ -43,7 +43,7 @@ function institution(id: string, kmAway: number, overrides = {}) {
       latitude: -3.1 + kmAway * KM,
       longitude: -60.0,
       hasRefrigeration: true,
-      availableCapacityKg: 100,
+      storageCapacityKg: 100,
       acceptedFoodTypes: [],
       validated: true,
       ...overrides,

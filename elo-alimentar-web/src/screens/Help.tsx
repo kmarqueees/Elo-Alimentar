@@ -40,6 +40,10 @@ export function Help() {
               <p>Na tela “Acompanhar lote” você vê para qual instituição o lote está oferecido agora e cada etapa: oferecido, aceito pela instituição e retirado.</p>
             </div>
             <div className="faq-item">
+              <h4>Como fico sabendo que recebi uma doação?</h4>
+              <p>Pelo sininho no topo da tela: ele mostra cada nova oferta, um lembrete quando faltam 10 minutos para o prazo e, para o doador, quando a doação é aceita, recusada, retirada ou vence. Ative os avisos do navegador no próprio sininho para ser avisado mesmo com o site em outra aba.</p>
+            </div>
+            <div className="faq-item">
               <h4>O que acontece se a instituição não responder a tempo?</h4>
               <p>Cada instituição tem 30 minutos para aceitar a oferta. Se recusar ou o prazo acabar, o lote é oferecido automaticamente à próxima da fila, e quem recusou não recebe aquele lote de novo. Se a validade passar antes de alguém aceitar, o lote sai de circulação.</p>
             </div>
@@ -49,7 +53,11 @@ export function Help() {
             </div>
             <div className="faq-item">
               <h4>Como a pontuação é calculada?</h4>
-              <p>Soma ponderada de proximidade (40%), urgência atendida (35%) e compatibilidade (25%). Refrigeração é regra eliminatória, não nota.</p>
+              <p>Soma ponderada de proximidade (30%), urgência da validade (30%), necessidade da instituição (25%) e compatibilidade (15%). Refrigeração, raio de 15 km, espaço de armazenamento e o limite de 2 doações em aberto por instituição são regras eliminatórias, não nota.</p>
+            </div>
+            <div className="faq-item">
+              <h4>O que é a necessidade da instituição?</h4>
+              <p>É para quantos dias o estoque da instituição ainda dá, calculado a partir das pessoas que ela atende (0,5 kg por pessoa por dia). Estoque para 1 dia ou menos dá prioridade máxima; para 7 dias ou mais, nenhuma. A instituição pode corrigir o estoque a qualquer momento no Perfil.</p>
             </div>
           </div>
         </div>

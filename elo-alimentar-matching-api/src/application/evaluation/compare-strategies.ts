@@ -1,9 +1,9 @@
 import type { FoodBatch } from '@/domain/food-batch/food-batch'
 import type { FoodBatchesRepository } from '@/domain/food-batch/food-batches-repository'
-import type { Institution } from '@/domain/institution/institution'
 import type { InstitutionsRepository } from '@/domain/institution/institutions-repository'
 import { DEFAULT_MATCHING_CONFIG } from '@/domain/matching/config'
-import type { MatchingConfig, MatchingStrategy } from '@/domain/matching/types'
+import { toMatchCandidate } from '@/domain/matching/match-candidate'
+import type { MatchableInstitution, MatchingConfig, MatchingStrategy } from '@/domain/matching/types'
 import { simulatePickup, type PickupOutcome } from './pickup-simulation'
 
 interface CompareStrategiesUseCaseRequest {
@@ -101,7 +101,11 @@ export class CompareStrategiesUseCase {
   }: CompareStrategiesUseCaseRequest): Promise<CompareStrategiesUseCaseResponse> {
     // Lotes ainda na fila de ofertas (não retirados nem vencidos), simulados desde o início.
     const batches = await this.batchesRepository.findManyInOfferQueue()
-    const institutions = await this.institutionsRepository.findManyValidated()
+    // Cada lote é simulado isoladamente desde o início (sem disputa entre lotes
+    // pela mesma instituição): mede só a qualidade da ordem de oferta.
+    const institutions = (await this.institutionsRepository.findManyValidated()).map(
+      (institution) => toMatchCandidate(institution, now),
+    )
 
     const perBatch = batches.map((batch) => ({
       batchId: batch.id,
@@ -122,7 +126,7 @@ export class CompareStrategiesUseCase {
     return { perBatch, summaries, ...comparison }
   }
 
-  private simulateBatch(batch: FoodBatch, institutions: Institution[], now: Date) {
+  private simulateBatch(batch: FoodBatch, institutions: MatchableInstitution[], now: Date) {
     const outcomes: Outcomes = {}
 
     for (const strategy of this.strategies) {

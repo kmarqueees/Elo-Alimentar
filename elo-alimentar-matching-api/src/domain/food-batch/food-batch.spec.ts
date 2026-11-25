@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ResourceNotFoundError } from '@/core/errors/resource-not-found-error'
+import { InvalidAddressError } from '../shared/errors/invalid-address-error'
 import { InvalidCoordinatesError } from '../shared/errors/invalid-coordinates-error'
 import { BatchAlreadyExpiredError } from './errors/batch-already-expired-error'
 import { BatchNotAvailableError } from './errors/batch-not-available-error'
@@ -38,6 +39,19 @@ describe('FoodBatch (agregado)', () => {
       expect(batch.status).toBe('AVAILABLE')
       expect(batch.offers).toEqual([])
       expect(batch.createdAt).toEqual(now)
+    })
+
+    it('guarda o endereço de retirada, quando informado', () => {
+      const batch = FoodBatch.register(
+        { ...input, address: { street: 'Rua A', number: '10', city: 'Manaus', state: 'AM' } },
+        now,
+      )
+
+      expect(batch.address?.format()).toBe('Rua A, 10, Manaus/AM')
+      expect(FoodBatch.register(input, now).address).toBeNull()
+      expect(() =>
+        FoodBatch.register({ ...input, address: { street: 'Rua A', number: '', city: 'Manaus', state: 'AM' } }, now),
+      ).toThrow(InvalidAddressError)
     })
 
     it('valida quantidade, validade e coordenadas, nessa ordem', () => {
@@ -189,22 +203,81 @@ describe('FoodBatch (agregado)', () => {
     it('só depois do aceite, só por quem aceitou e só uma vez', () => {
       const { batch, offer } = offeredBatch()
 
-      expect(() => batch.completePickup(offer.id, 'inst-a')).toThrow(
+      expect(() => batch.completePickup(offer.id, 'inst-a', now)).toThrow(
         InvalidOfferStateError,
       )
 
       batch.acceptOffer(offer.id, 'inst-a', minutesLater(5))
 
-      expect(() => batch.completePickup(offer.id, 'inst-b')).toThrow(
+      expect(() => batch.completePickup(offer.id, 'inst-b', now)).toThrow(
         OfferForAnotherInstitutionError,
       )
 
-      batch.completePickup(offer.id, 'inst-a')
+      batch.completePickup(offer.id, 'inst-a', now)
 
       expect(batch.status).toBe('COLLECTED')
-      expect(() => batch.completePickup(offer.id, 'inst-a')).toThrow(
+      expect(batch.pullDomainEvents().map((event) => event.constructor.name)).toEqual([
+        'OfferMade',
+        'OfferAccepted',
+        'DonationCollected',
+      ])
+      expect(batch.pullDomainEvents()).toEqual([])
+      expect(() => batch.completePickup(offer.id, 'inst-a', now)).toThrow(
         InvalidOfferStateError,
       )
+    })
+  })
+
+  describe('eventos de domínio (base das notificações)', () => {
+    const names = (batch: FoodBatch) => batch.pullDomainEvents().map((event) => event.constructor.name)
+
+    it('oferta, recusa e expiração', () => {
+      const { batch, offer } = offeredBatch()
+
+      batch.declineOffer(offer.id, 'inst-a', now)
+      const second = batch.offerTo({ institutionId: 'inst-b', score: 0.5, now, timeoutMinutes: 30 })
+      batch.expireOverdueOffers(minutesLater(30))
+      batch.reportWaitingForInstitution(minutesLater(30))
+
+      expect(names(batch)).toEqual(['OfferMade', 'OfferDeclined', 'OfferMade', 'OfferExpired', 'WaitingForInstitution'])
+      expect(second.status).toBe('EXPIRED')
+    })
+
+    it('lembra uma única vez quando faltam 10 minutos', () => {
+      const { batch, offer } = offeredBatch()
+
+      batch.pullDomainEvents()
+
+      expect(batch.remindPendingOffers(minutesLater(19), 10)).toEqual([])
+      expect(batch.remindPendingOffers(minutesLater(21), 10)).toEqual([offer])
+      expect(batch.remindPendingOffers(minutesLater(25), 10)).toEqual([])
+      expect(names(batch)).toEqual(['OfferReminderDue'])
+      expect(offer.remindedAt).toEqual(minutesLater(21))
+    })
+
+    it('não lembra ofertas com prazo menor que o aviso', () => {
+      const batch = FoodBatch.register(input, now)
+      batch.offerTo({ institutionId: 'inst-a', score: 1, now, timeoutMinutes: 5 })
+
+      expect(batch.remindPendingOffers(minutesLater(1), 10)).toEqual([])
+    })
+
+    it('lote vencido avisa a instituição com oferta pendente e o doador', () => {
+      const { batch } = offeredBatch()
+
+      batch.pullDomainEvents()
+      batch.expireIfPastValidity(input.expiresAt)
+
+      expect(names(batch)).toEqual(['BatchExpired'])
+    })
+
+    it('só avisa "sem instituição" quando o lote está de fato sem oferta', () => {
+      const { batch } = offeredBatch()
+
+      batch.pullDomainEvents()
+      batch.reportWaitingForInstitution(now)
+
+      expect(names(batch)).toEqual([])
     })
   })
 })

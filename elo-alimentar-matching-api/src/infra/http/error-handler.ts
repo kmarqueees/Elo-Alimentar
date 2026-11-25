@@ -5,6 +5,7 @@ import {
   InvalidValueError,
   NotAllowedError,
 } from '@/core/errors/domain-error'
+import { ExternalServiceUnavailableError } from '@/core/errors/external-service-unavailable-error'
 import { ResourceNotFoundError } from '@/core/errors/resource-not-found-error'
 
 type ErrorClass = abstract new (...args: never[]) => Error
@@ -41,6 +42,12 @@ export function errorHandler(
 
   if (category) {
     return reply.status(category[1]).send({ message: error.message })
+  }
+
+  if (error instanceof ExternalServiceUnavailableError) {
+    console.error(error)
+
+    return reply.status(503).send({ message: error.message })
   }
 
   const statusCode = (error as { statusCode?: number }).statusCode

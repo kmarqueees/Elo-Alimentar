@@ -20,6 +20,7 @@ async function main() {
     throw new Error('Seed bloqueado em produção.')
   }
 
+  await prisma.notification.deleteMany()
   await prisma.offer.deleteMany()
   await prisma.foodBatch.deleteMany()
   await prisma.institution.deleteMany()
@@ -51,14 +52,14 @@ async function main() {
   }
 
   const { institutions, batches } = generateScenario(42)
+  const now = new Date()
   const institutionsRepository = new PrismaInstitutionsRepository(prisma)
   const batchesRepository = new PrismaFoodBatchesRepository(prisma)
 
   for (const institution of institutions) {
-    await institutionsRepository.create(institutionFromScenario(institution))
+    await institutionsRepository.create(institutionFromScenario(institution, now))
   }
 
-  const now = new Date()
   const shiftMs = now.getTime() - SCENARIO_NOW.getTime()
 
   for (const [index, batch] of batches.entries()) {

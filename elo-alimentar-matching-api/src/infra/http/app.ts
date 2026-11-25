@@ -1,8 +1,10 @@
 import fastify from 'fastify'
 import { batchesController } from './controllers/batches.controller'
+import { geocodingController } from './controllers/geocoding.controller'
 import { healthController } from './controllers/health.controller'
 import { institutionsController } from './controllers/institutions.controller'
 import { matchingController } from './controllers/matching.controller'
+import { notificationsController } from './controllers/notifications.controller'
 import { offersController } from './controllers/offers.controller'
 import { errorHandler } from './error-handler'
 import type { HttpDependencies } from './http-dependencies'
@@ -20,6 +22,8 @@ export function buildHttpApp(dependencies: HttpDependencies) {
   batchesController(app, dependencies)
   offersController(app, dependencies)
   matchingController(app, dependencies)
+  geocodingController(app, dependencies)
+  notificationsController(app, dependencies)
 
   return app
 }

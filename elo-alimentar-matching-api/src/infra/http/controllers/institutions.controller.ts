@@ -10,26 +10,32 @@ const createInstitutionBody = z.object({
   latitude: z.number(),
   longitude: z.number(),
   hasRefrigeration: z.boolean(),
-  availableCapacityKg: z.number(),
+  storageCapacityKg: z.number(),
+  peopleServed: z.number(),
+  stockKg: z.number().default(0),
   acceptedFoodTypes: z.array(z.enum(FOOD_TYPES)).default([]),
 })
 
+const updateStockBody = z.object({ stockKg: z.number() })
+
 export function institutionsController(
   app: FastifyInstance,
-  { useCases }: HttpDependencies,
+  { useCases, clock }: HttpDependencies,
 ) {
   app.post('/institutions', async (request, reply) => {
     const body = createInstitutionBody.parse(request.body)
+    const now = clock()
 
-    const { institution } = await useCases.registerInstitution.execute(body)
+    const { institution } = await useCases.registerInstitution.execute({ ...body, now })
 
-    return reply.status(201).send({ institution: presentInstitution(institution) })
+    return reply.status(201).send({ institution: presentInstitution(institution, now) })
   })
 
   app.get('/institutions', async () => {
+    const now = clock()
     const { institutions } = await useCases.listInstitutions.execute()
 
-    return { institutions: institutions.map(presentInstitution) }
+    return { institutions: institutions.map((item) => presentInstitution(item, now)) }
   })
 
   app.patch('/institutions/:id/validate', async (request) => {
@@ -39,6 +45,21 @@ export function institutionsController(
       institutionId: id,
     })
 
-    return { institution: presentInstitution(institution) }
+    return { institution: presentInstitution(institution, clock()) }
+  })
+
+  /** A instituição informa o estoque real; o sistema volta a estimar a partir dele. */
+  app.patch('/institutions/:id/stock', async (request) => {
+    const { id } = idParams.parse(request.params)
+    const { stockKg } = updateStockBody.parse(request.body)
+    const now = clock()
+
+    const { institution } = await useCases.updateInstitutionStock.execute({
+      institutionId: id,
+      stockKg,
+      now,
+    })
+
+    return { institution: presentInstitution(institution, now) }
   })
 }

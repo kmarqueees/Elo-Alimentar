@@ -6,6 +6,16 @@ import type { HttpDependencies } from '../http-dependencies'
 import { presentFoodBatch } from '../presenters/food-batch-presenter'
 import { idParams } from './schemas'
 
+const addressBody = z.object({
+  street: z.string(),
+  number: z.string(),
+  complement: z.string().nullish(),
+  district: z.string().nullish(),
+  city: z.string(),
+  state: z.string(),
+  postalCode: z.string().nullish(),
+})
+
 const createBatchBody = z.object({
   donorId: z.string().min(1),
   foodType: z.enum(FOOD_TYPES),
@@ -14,6 +24,8 @@ const createBatchBody = z.object({
   storageCondition: z.enum(STORAGE_CONDITIONS),
   latitude: z.number(),
   longitude: z.number(),
+  /** Opcional: o local pode ser marcado só no mapa. */
+  address: addressBody.nullish(),
 })
 
 const listBatchesQuery = z.object({

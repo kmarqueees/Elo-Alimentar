@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client'
 import { CompareStrategiesUseCase } from '@/application/evaluation/compare-strategies'
 import { MatchBatchUseCase } from '@/application/use-cases/matching/match-batch'
 import { BatchNotAvailableError } from '@/domain/food-batch/errors/batch-not-available-error'
+import { FoodBatch } from '@/domain/food-batch/food-batch'
 import { EligibleInstitutionsRanker } from '@/domain/matching/eligible-institutions-ranker'
 import { DistanceOnlyStrategy } from '@/domain/matching/strategies/distance-only-strategy'
 import { MultiCriteriaStrategy } from '@/domain/matching/strategies/multi-criteria-strategy'
@@ -20,6 +21,8 @@ import { makeInstitution } from '@/test/factories/make-institution'
 import { PrismaDonorsRepository } from './prisma-donors-repository'
 import { PrismaFoodBatchesRepository } from './prisma-food-batches-repository'
 import { PrismaInstitutionsRepository } from './prisma-institutions-repository'
+import { PrismaNotificationsRepository } from './prisma-notifications-repository'
+import { Notification } from '@/domain/notification/notification'
 
 const testUrl = process.env.TEST_DATABASE_URL
 
@@ -33,6 +36,7 @@ const client = new PrismaClient({ datasourceUrl: testUrl })
 const batchesRepository = new PrismaFoodBatchesRepository(client)
 const institutionsRepository = new PrismaInstitutionsRepository(client)
 const donorsRepository = new PrismaDonorsRepository(client)
+const notificationsRepository = new PrismaNotificationsRepository(client)
 
 async function createDonor(label = 'donor') {
   return client.user.create({
@@ -51,6 +55,7 @@ describe('Repositórios Prisma (integração)', () => {
   })
 
   beforeEach(async () => {
+    await client.notification.deleteMany()
     await client.offer.deleteMany()
     await client.foodBatch.deleteMany()
     await client.institution.deleteMany()
@@ -90,6 +95,36 @@ describe('Repositórios Prisma (integração)', () => {
     expect(found?.expiresAt.getTime()).toEqual(expiresAt.getTime())
   })
 
+  it('persiste o endereço de retirada do lote', async () => {
+    const donor = await createDonor()
+    const batch = FoodBatch.register(
+      {
+        donorId: donor.id,
+        foodType: 'PANIFICADOS',
+        quantityKg: 5,
+        expiresAt: new Date('2027-01-01T00:00:00Z'),
+        storageCondition: 'DRY',
+        latitude: -3.1316,
+        longitude: -60.0234,
+        address: {
+          street: 'Avenida Eduardo Ribeiro',
+          number: '520',
+          district: 'Centro',
+          city: 'Manaus',
+          state: 'AM',
+          postalCode: '69005-040',
+        },
+      },
+      new Date('2026-10-16T12:00:00Z'),
+    )
+
+    await batchesRepository.create(batch)
+
+    const found = (await batchesRepository.findById(batch.id))!
+
+    expect(found.address?.format()).toBe('Avenida Eduardo Ribeiro, 520 - Centro, Manaus/AM, 69005-040')
+  })
+
   it('devolve null quando o lote não existe', async () => {
     expect(await batchesRepository.findById('inexistente')).toBeNull()
   })
@@ -126,7 +161,7 @@ describe('Repositórios Prisma (integração)', () => {
         latitude: -3.1,
         longitude: -60,
         hasRefrigeration: true,
-        availableCapacityKg: 80,
+        storageCapacityKg: 80,
         acceptedFoodTypes: ['HORTIFRUTI', 'LATICINIOS'],
         validated: true,
       }),
@@ -136,7 +171,7 @@ describe('Repositórios Prisma (integração)', () => {
       latitude: -3.1,
       longitude: -60,
       hasRefrigeration: false,
-      availableCapacityKg: 10,
+      storageCapacityKg: 10,
       acceptedFoodTypes: [],
       validated: false,
     })
@@ -155,6 +190,32 @@ describe('Repositórios Prisma (integração)', () => {
     await institutionsRepository.save(pending)
 
     expect(await institutionsRepository.findManyValidated()).toHaveLength(2)
+  })
+
+  it('persiste pessoas atendidas, capacidade e estoque da instituição', async () => {
+    const informedAt = new Date('2026-10-16T12:00:00Z')
+    const institution = makeInstitution({
+      name: 'Com estoque',
+      storageCapacityKg: 300,
+      peopleServed: 80,
+      stockKg: 120,
+      stockUpdatedAt: informedAt,
+    })
+
+    await institutionsRepository.create(institution)
+
+    const found = (await institutionsRepository.findById(institution.id))!
+
+    expect(found).toMatchObject({ storageCapacityKg: 300, peopleServed: 80, stockKg: 120 })
+    expect(found.stockUpdatedAt.getTime()).toBe(informedAt.getTime())
+    expect(found.stockDays(informedAt)).toBe(3)
+
+    found.updateStock(40, new Date('2026-10-17T12:00:00Z'))
+    await institutionsRepository.save(found)
+
+    const reloaded = (await institutionsRepository.findById(institution.id))!
+
+    expect(reloaded.stockKg).toBe(40)
   })
 
   it('o MatchBatch funciona lendo do banco (RN01 aplicada)', async () => {
@@ -178,7 +239,7 @@ describe('Repositórios Prisma (integração)', () => {
         latitude: -3.1 + 1 * KM,
         longitude: -60,
         hasRefrigeration: false,
-        availableCapacityKg: 100,
+        storageCapacityKg: 100,
         acceptedFoodTypes: [],
         validated: true,
       }),
@@ -189,7 +250,7 @@ describe('Repositórios Prisma (integração)', () => {
         latitude: -3.1 + 4 * KM,
         longitude: -60,
         hasRefrigeration: true,
-        availableCapacityKg: 100,
+        storageCapacityKg: 100,
         acceptedFoodTypes: [],
         validated: true,
       }),
@@ -304,6 +365,52 @@ describe('Repositórios Prisma (integração)', () => {
     const reloaded = (await batchesRepository.findById(batch.id))!
 
     expect(reloaded.offers.map((item) => item.institutionId)).toEqual([a.id])
+  })
+
+  it('grava o lembrete da oferta (sem mudar o status)', async () => {
+    const donor = await createDonor()
+    const now = new Date('2026-10-16T12:00:00Z')
+    const batch = makeFoodBatch({ donorId: donor.id })
+    const institution = makeInstitution({ name: 'A' })
+
+    await institutionsRepository.create(institution)
+    const offer = batch.offerTo({ institutionId: institution.id, score: 1, now, timeoutMinutes: 30 })
+    await batchesRepository.create(batch)
+
+    const loaded = (await batchesRepository.findById(batch.id))!
+
+    expect(loaded.remindPendingOffers(new Date('2026-10-16T12:21:00Z'), 10)).toHaveLength(1)
+    await batchesRepository.save(loaded)
+
+    const reloaded = (await batchesRepository.findById(batch.id))!
+
+    expect(reloaded.offers[0]!.remindedAt?.toISOString()).toBe('2026-10-16T12:21:00.000Z')
+    expect(reloaded.offers[0]!.id).toBe(offer.id)
+  })
+
+  it('persiste notificações, conta as não lidas e marca como lida', async () => {
+    const notification = Notification.create({
+      recipientType: 'INSTITUTION',
+      recipientId: 'inst-1',
+      type: 'OFFER_RECEIVED',
+      title: 'Nova doação para você',
+      message: '18 kg de hortifruti…',
+      batchId: null,
+      offerId: null,
+      createdAt: new Date('2026-10-16T12:00:00Z'),
+    })
+
+    await notificationsRepository.create(notification)
+
+    expect(await notificationsRepository.countUnread('inst-1')).toBe(1)
+
+    notification.markAsReadBy('inst-1', new Date('2026-10-16T12:05:00Z'))
+    await notificationsRepository.save(notification)
+
+    const [found] = await notificationsRepository.findManyByRecipient('inst-1', 10)
+
+    expect(found?.readAt?.toISOString()).toBe('2026-10-16T12:05:00.000Z')
+    expect(await notificationsRepository.countUnread('inst-1')).toBe(0)
   })
 
   it('o cenário da simulação dá o MESMO resultado no banco e em memória', async () => {

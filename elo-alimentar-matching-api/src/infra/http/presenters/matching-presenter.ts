@@ -25,6 +25,7 @@ export function presentRanking(ranking: MatchResult[]) {
     criteria: {
       proximity: round(result.criteria.proximity, 3),
       urgency: round(result.criteria.urgency, 3),
+      need: round(result.criteria.need, 3),
       compatibility: round(result.criteria.compatibility, 3),
     },
   }))

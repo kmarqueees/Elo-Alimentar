@@ -2,9 +2,9 @@ import { ResourceNotFoundError } from '@/core/errors/resource-not-found-error'
 import { BatchNotAvailableError } from '@/domain/food-batch/errors/batch-not-available-error'
 import type { FoodBatch } from '@/domain/food-batch/food-batch'
 import type { FoodBatchesRepository } from '@/domain/food-batch/food-batches-repository'
-import type { Institution } from '@/domain/institution/institution'
 import type { InstitutionsRepository } from '@/domain/institution/institutions-repository'
 import type { EligibleInstitutionsRanker } from '@/domain/matching/eligible-institutions-ranker'
+import { InstitutionWorkload } from '@/domain/matching/institution-workload'
 import type { MatchResult } from '@/domain/matching/types'
 
 interface MatchBatchUseCaseRequest {
@@ -14,7 +14,7 @@ interface MatchBatchUseCaseRequest {
 
 interface MatchBatchUseCaseResponse {
   batch: FoodBatch
-  ranking: MatchResult<Institution>[]
+  ranking: MatchResult[]
 }
 
 export class MatchBatchUseCase {
@@ -41,7 +41,8 @@ export class MatchBatchUseCase {
 
     const institutions = await this.institutionsRepository.findManyValidated()
 
-    const ranking = this.ranker.rank(batch, institutions, now)
+    const workload = InstitutionWorkload.fromBatches(await this.batchesRepository.findManyWithOpenOffers())
+    const ranking = this.ranker.rank(batch, institutions, now, workload)
 
     return { batch, ranking }
   }

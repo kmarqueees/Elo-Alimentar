@@ -33,6 +33,8 @@ function makeInstitution(
     hasRefrigeration: true,
     availableCapacityKg: 100,
     acceptedFoodTypes: [],
+    // Estoque confortável: necessidade neutra, salvo quando o teste muda.
+    stockDays: 30,
     ...overrides,
   }
 }
@@ -161,7 +163,7 @@ describe('MultiCriteriaStrategy', () => {
       for (const hours of [1, 24, 60, 100, 168, 400]) {
         const w = sut.effectiveWeights(hours)
 
-        expect(w.proximity + w.urgency + w.compatibility).toBeCloseTo(1, 10)
+        expect(w.proximity + w.urgency + w.need + w.compatibility).toBeCloseTo(1, 10)
       }
     })
 
@@ -170,6 +172,37 @@ describe('MultiCriteriaStrategy', () => {
 
       expect(w.proximity).toBeCloseTo(DEFAULT_MATCHING_CONFIG.weights.proximity, 10)
       expect(w.urgency).toBeCloseTo(DEFAULT_MATCHING_CONFIG.weights.urgency, 10)
+    })
+  })
+
+  describe('necessidade da instituição', () => {
+    it('should prefer the institution whose stock is running out', () => {
+      const comfortable = makeInstitution('estoque-cheio', 2, { stockDays: 10 })
+      const runningOut = makeInstitution('estoque-acabando', 2, { stockDays: 0.5 })
+
+      const ranking = sut.rank(makeBatch(), [comfortable, runningOut], now)
+
+      expect(ranking.map((r) => r.institution.id)).toEqual(['estoque-acabando', 'estoque-cheio'])
+      expect(ranking[0]!.criteria.need).toEqual(1)
+      expect(ranking[1]!.criteria.need).toEqual(0)
+    })
+
+    it('should let a slightly farther institution in need beat a closer one with full stock', () => {
+      const closeFull = makeInstitution('perto-cheio', 1, { stockDays: 10 })
+      const fartherInNeed = makeInstitution('longe-precisando', 4, { stockDays: 0.5 })
+
+      const ranking = sut.rank(makeBatch(), [closeFull, fartherInNeed], now)
+
+      expect(ranking[0]?.institution.id).toEqual('longe-precisando')
+    })
+
+    it('should scale need linearly between 1 and 7 days of stock', () => {
+      const at = (stockDays: number) =>
+        sut.rank(makeBatch(), [makeInstitution('x', 1, { stockDays })], now)[0]!.criteria.need
+
+      expect(at(1)).toEqual(1)
+      expect(at(4)).toBeCloseTo(0.5, 10)
+      expect(at(7)).toEqual(0)
     })
   })
 })

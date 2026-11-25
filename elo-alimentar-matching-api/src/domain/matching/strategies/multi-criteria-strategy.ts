@@ -4,6 +4,7 @@ import {
   distanceKm,
   hoursUntilExpiry,
   meetsStorageRequirement,
+  needScore,
   proximityScore,
   travelHours,
 } from '../criteria'
@@ -48,11 +49,13 @@ export class MultiCriteriaStrategy implements MatchingStrategy {
       .map(({ institution, distance, travel }) => {
         const proximity = proximityScore(distance, this.config)
         const urgency = clamp01(1 - travel / hoursLeft)
+        const need = needScore(institution.stockDays, this.config)
         const compatibility = this.compatibilityScore(batch, institution)
 
         const score =
           weights.proximity * proximity +
           weights.urgency * urgency +
+          weights.need * need +
           weights.compatibility * compatibility
 
         return {
@@ -60,7 +63,7 @@ export class MultiCriteriaStrategy implements MatchingStrategy {
           score,
           distanceKm: distance,
           travelMinutes: travel * 60,
-          criteria: { proximity, urgency, compatibility },
+          criteria: { proximity, urgency, need, compatibility },
         }
       })
       .sort((a, b) => b.score - a.score)
@@ -81,13 +84,14 @@ export class MultiCriteriaStrategy implements MatchingStrategy {
   }
 
   effectiveWeights(hoursLeft: number) {
-    const { proximity, urgency, compatibility } = this.config.weights
+    const { proximity, urgency, need, compatibility } = this.config.weights
     const adjustedUrgency = urgency * this.urgencyIntensity(hoursLeft)
-    const total = proximity + adjustedUrgency + compatibility
+    const total = proximity + adjustedUrgency + need + compatibility
 
     return {
       proximity: proximity / total,
       urgency: adjustedUrgency / total,
+      need: need / total,
       compatibility: compatibility / total,
     }
   }

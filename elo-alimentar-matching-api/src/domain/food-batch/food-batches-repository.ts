@@ -11,6 +11,8 @@ export interface FoodBatchesRepository {
   findMany(status?: BatchStatus): Promise<FoodBatch[]>
   /** Lotes que ainda estão na fila de ofertas: AVAILABLE ou OFFERED. */
   findManyInOfferQueue(): Promise<FoodBatch[]>
+  /** Lotes com oferta em aberto (OFFERED ou RESERVED): base da carga de cada instituição. */
+  findManyWithOpenOffers(): Promise<FoodBatch[]>
   /** Lotes que já foram oferecidos a esta instituição (em qualquer status). */
   findManyOfferedTo(institutionId: string): Promise<FoodBatch[]>
   create(batch: FoodBatch): Promise<void>

@@ -8,11 +8,19 @@ export interface MakeInstitutionOverrides {
   latitude?: number
   longitude?: number
   hasRefrigeration?: boolean
-  availableCapacityKg?: number
+  storageCapacityKg?: number
+  peopleServed?: number
+  stockKg?: number
+  stockUpdatedAt?: Date
   acceptedFoodTypes?: FoodType[]
   validated?: boolean
 }
 
+/**
+ * Instituição pronta para testes. Por padrão o consumo é desconhecido
+ * (peopleServed = 0 → necessidade neutra) e o estoque está vazio, para que
+ * cada teste ligue só o critério que quer exercitar.
+ */
 export function makeInstitution({
   id,
   latitude = -3.1,
@@ -25,7 +33,10 @@ export function makeInstitution({
     {
       name: institutionId,
       hasRefrigeration: true,
-      availableCapacityKg: 100,
+      storageCapacityKg: 100,
+      peopleServed: 0,
+      stockKg: 0,
+      stockUpdatedAt: new Date('2026-10-16T12:00:00Z'),
       acceptedFoodTypes: [],
       validated: true,
       ...overrides,

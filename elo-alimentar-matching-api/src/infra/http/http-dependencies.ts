@@ -1,11 +1,17 @@
 import type { CompareStrategiesUseCase } from '@/application/evaluation/compare-strategies'
 import type { GetBatchUseCase } from '@/application/use-cases/food-batches/get-batch'
+import type { LookupPostalCodeUseCase } from '@/application/use-cases/geocoding/lookup-postal-code'
+import type { SearchAddressUseCase } from '@/application/use-cases/geocoding/search-address'
 import type { ListBatchesUseCase } from '@/application/use-cases/food-batches/list-batches'
 import type { RegisterFoodBatchUseCase } from '@/application/use-cases/food-batches/register-food-batch'
 import type { ListInstitutionsUseCase } from '@/application/use-cases/institutions/list-institutions'
 import type { RegisterInstitutionUseCase } from '@/application/use-cases/institutions/register-institution'
+import type { UpdateInstitutionStockUseCase } from '@/application/use-cases/institutions/update-institution-stock'
 import type { ValidateInstitutionUseCase } from '@/application/use-cases/institutions/validate-institution'
 import type { MatchBatchUseCase } from '@/application/use-cases/matching/match-batch'
+import type { ListNotificationsUseCase } from '@/application/use-cases/notifications/list-notifications'
+import type { MarkAllNotificationsReadUseCase } from '@/application/use-cases/notifications/mark-all-notifications-read'
+import type { MarkNotificationReadUseCase } from '@/application/use-cases/notifications/mark-notification-read'
 import type { AcceptOfferUseCase } from '@/application/use-cases/offers/accept-offer'
 import type { AdvanceOfferQueueUseCase } from '@/application/use-cases/offers/advance-offer-queue'
 import type { CompletePickupUseCase } from '@/application/use-cases/offers/complete-pickup'
@@ -22,6 +28,7 @@ export interface UseCases {
   registerInstitution: RegisterInstitutionUseCase
   listInstitutions: ListInstitutionsUseCase
   validateInstitution: ValidateInstitutionUseCase
+  updateInstitutionStock: UpdateInstitutionStockUseCase
   registerFoodBatch: RegisterFoodBatchUseCase
   listBatches: ListBatchesUseCase
   getBatch: GetBatchUseCase
@@ -33,6 +40,11 @@ export interface UseCases {
   declineOffer: DeclineOfferUseCase
   completePickup: CompletePickupUseCase
   advanceOfferQueue: AdvanceOfferQueueUseCase
+  lookupPostalCode: LookupPostalCodeUseCase
+  searchAddress: SearchAddressUseCase
+  listNotifications: ListNotificationsUseCase
+  markNotificationRead: MarkNotificationReadUseCase
+  markAllNotificationsRead: MarkAllNotificationsReadUseCase
 }
 
 export interface HttpDependencies {

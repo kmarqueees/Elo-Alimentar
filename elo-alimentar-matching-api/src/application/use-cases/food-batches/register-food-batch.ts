@@ -1,3 +1,4 @@
+import type { DomainEventPublisher } from '@/core/events/domain-event-publisher'
 import { ResourceNotFoundError } from '@/core/errors/resource-not-found-error'
 import type { DonorsRepository } from '@/domain/donor/donors-repository'
 import {
@@ -6,6 +7,7 @@ import {
 } from '@/domain/food-batch/food-batch'
 import type { FoodBatchesRepository } from '@/domain/food-batch/food-batches-repository'
 import type { InstitutionsRepository } from '@/domain/institution/institutions-repository'
+import { InstitutionWorkload } from '@/domain/matching/institution-workload'
 import type { SequentialOfferService } from '@/domain/matching/sequential-offer-service'
 
 interface RegisterFoodBatchUseCaseRequest extends RegisterFoodBatchInput {
@@ -27,6 +29,7 @@ export class RegisterFoodBatchUseCase {
     private donorsRepository: DonorsRepository,
     private institutionsRepository: InstitutionsRepository,
     private offers: SequentialOfferService,
+    private events: DomainEventPublisher,
   ) {}
 
   async execute({
@@ -40,10 +43,14 @@ export class RegisterFoodBatchUseCase {
     }
 
     const institutions = await this.institutionsRepository.findManyValidated()
+    const workload = InstitutionWorkload.fromBatches(await this.batchesRepository.findManyWithOpenOffers())
 
-    this.offers.offerToNext(batch, institutions, now)
+    if (!this.offers.offerToNext(batch, institutions, now, workload)) {
+      batch.reportWaitingForInstitution(now)
+    }
 
     await this.batchesRepository.create(batch)
+    await this.events.publish(batch.pullDomainEvents())
 
     return { batch }
   }

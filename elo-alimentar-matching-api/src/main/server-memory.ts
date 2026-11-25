@@ -2,6 +2,7 @@ import { env } from '@/infra/env'
 import { InMemoryDonorsRepository } from '@/infra/database/in-memory/in-memory-donors-repository'
 import { InMemoryFoodBatchesRepository } from '@/infra/database/in-memory/in-memory-food-batches-repository'
 import { InMemoryInstitutionsRepository } from '@/infra/database/in-memory/in-memory-institutions-repository'
+import { InMemoryNotificationsRepository } from '@/infra/database/in-memory/in-memory-notifications-repository'
 import {
   SCENARIO_NOW,
   batchFromScenario,
@@ -13,15 +14,16 @@ import { makeApp } from './make-app'
 const batchesRepository = new InMemoryFoodBatchesRepository()
 const institutionsRepository = new InMemoryInstitutionsRepository()
 const donorsRepository = new InMemoryDonorsRepository()
+const notificationsRepository = new InMemoryNotificationsRepository()
 
 async function main() {
   const { institutions, batches } = generateScenario(42)
+  const now = new Date()
 
   for (const institution of institutions) {
-    await institutionsRepository.create(institutionFromScenario(institution))
+    await institutionsRepository.create(institutionFromScenario(institution, now))
   }
 
-  const now = new Date()
   const shiftMs = now.getTime() - SCENARIO_NOW.getTime()
 
   for (const [index, batch] of batches.entries()) {
@@ -41,8 +43,10 @@ async function main() {
     batchesRepository,
     institutionsRepository,
     donorsRepository,
+    notificationsRepository,
     offerTimeoutMinutes: env.OFFER_TIMEOUT_MINUTES,
     offerQueueIntervalMs: env.OFFER_QUEUE_INTERVAL_MS,
+    geocoderUserAgent: env.GEOCODER_USER_AGENT,
   })
 
   await app.listen({ port: env.PORT })

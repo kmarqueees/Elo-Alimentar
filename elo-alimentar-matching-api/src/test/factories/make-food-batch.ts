@@ -1,5 +1,6 @@
 import { FoodBatch, type BatchStatus } from '@/domain/food-batch/food-batch'
 import type { Offer } from '@/domain/food-batch/offer'
+import type { Address } from '@/domain/shared/address'
 import { Coordinates } from '@/domain/shared/coordinates'
 import type { FoodType, StorageCondition } from '@/domain/shared/food'
 
@@ -15,6 +16,7 @@ export interface MakeFoodBatchOverrides {
   status?: BatchStatus
   createdAt?: Date
   offers?: Offer[]
+  address?: Address | null
 }
 
 /**
@@ -37,6 +39,7 @@ export function makeFoodBatch({
       status: 'AVAILABLE',
       createdAt: new Date('2026-10-16T10:00:00Z'),
       offers: [],
+      address: null,
       ...overrides,
       coordinates: Coordinates.create(latitude, longitude),
     },

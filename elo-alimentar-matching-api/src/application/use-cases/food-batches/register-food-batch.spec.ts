@@ -1,4 +1,5 @@
 import { expect, describe, it, beforeEach } from 'vitest'
+import { DomainEventPublisher } from '@/core/events/domain-event-publisher'
 import { ResourceNotFoundError } from '@/core/errors/resource-not-found-error'
 import { BatchAlreadyExpiredError } from '@/domain/food-batch/errors/batch-already-expired-error'
 import { InvalidBatchQuantityError } from '@/domain/food-batch/errors/invalid-batch-quantity-error'
@@ -41,6 +42,7 @@ describe('Register Food Batch Use Case', () => {
         new EligibleInstitutionsRanker(new MultiCriteriaStrategy()),
         30,
       ),
+      new DomainEventPublisher(),
     )
   })
 

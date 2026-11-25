@@ -196,6 +196,7 @@ export function Matching({ batchId, onSelect, session }: MatchingProps) {
 
                 <div>
                   <h3 className="section-title">Local de retirada</h3>
+                  {batch.address && <p className="map-address">{batch.address.formatted}</p>}
                   <MapView markers={markers} label="Mapa com o local de retirada da doação" />
                 </div>
               </div>
@@ -225,6 +226,18 @@ function DonationCard({ batch, now, distanceFromYou }: { batch: Batch; now: numb
       </div>
 
       <dl className="facts">
+        {batch.address && (
+          <div className="fact wide">
+            <dt>Endereço de retirada</dt>
+            <dd>
+              {batch.address.street}, {batch.address.number}
+              {batch.address.complement ? `, ${batch.address.complement}` : ''}
+              <small>
+                {[batch.address.district, `${batch.address.city}/${batch.address.state}`, batch.address.postalCode].filter(Boolean).join(' · ')}
+              </small>
+            </dd>
+          </div>
+        )}
         <div className={`fact ${urgent ? 'urgent' : ''}`}>
           <dt>Validade</dt>
           <dd>
@@ -381,7 +394,10 @@ function OffersList({
           <li key={item.institution.id} className="offer-item next">
             <span className="pos">{offers.length + index + 1}</span>
             <div>
-              <b>{item.institution.name}</b>
+              <b>
+                {item.institution.name}
+                {item.criteria.need >= 0.75 && <span className="need-tag">estoque baixo</span>}
+              </b>
               <span className="when">{num(item.distanceKm)} km do local de retirada</span>
             </div>
             <span className="offer-tag next">{index === 0 && !offers.some((o) => o.status === 'PENDING') ? 'Próxima' : 'Na fila'}</span>

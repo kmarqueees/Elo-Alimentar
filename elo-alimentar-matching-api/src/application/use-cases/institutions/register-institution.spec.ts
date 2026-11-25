@@ -12,7 +12,9 @@ const validRequest = {
   latitude: -3.11,
   longitude: -60.0217,
   hasRefrigeration: true,
-  availableCapacityKg: 80,
+  storageCapacityKg: 80,
+  peopleServed: 60,
+  now: new Date('2026-10-16T12:00:00Z'),
 }
 
 describe('Register Institution Use Case', () => {
@@ -40,7 +42,7 @@ describe('Register Institution Use Case', () => {
 
   it('should reject zero or negative capacity', async () => {
     await expect(() =>
-      sut.execute({ ...validRequest, availableCapacityKg: 0 }),
+      sut.execute({ ...validRequest, storageCapacityKg: 0 }),
     ).rejects.toBeInstanceOf(InvalidCapacityError)
   })
 

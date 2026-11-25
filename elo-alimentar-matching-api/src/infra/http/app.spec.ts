@@ -3,6 +3,9 @@ import type { FastifyInstance } from 'fastify'
 import { InMemoryDonorsRepository } from '@/infra/database/in-memory/in-memory-donors-repository'
 import { InMemoryFoodBatchesRepository } from '@/infra/database/in-memory/in-memory-food-batches-repository'
 import { InMemoryInstitutionsRepository } from '@/infra/database/in-memory/in-memory-institutions-repository'
+import { InMemoryNotificationsRepository } from '@/infra/database/in-memory/in-memory-notifications-repository'
+import type { AddressServices } from '@/main/container'
+import { ExternalServiceUnavailableError } from '@/core/errors/external-service-unavailable-error'
 import type { UseCases } from '@/infra/http/http-dependencies'
 import { makeApp } from '@/main/make-app'
 import {
@@ -38,7 +41,8 @@ const nearNoFridge = {
   latitude: -3.11,
   longitude: -60.0217,
   hasRefrigeration: false,
-  availableCapacityKg: 100,
+  storageCapacityKg: 100,
+  peopleServed: 50,
 }
 
 const farWithFridge = {
@@ -46,7 +50,38 @@ const farWithFridge = {
   latitude: -3.083,
   longitude: -60.0217,
   hasRefrigeration: true,
-  availableCapacityKg: 100,
+  storageCapacityKg: 100,
+  peopleServed: 50,
+}
+
+/** Serviços de endereço simulados: nenhum teste acessa ViaCEP ou Nominatim. */
+const addressServices: AddressServices = {
+  postalCodes: {
+    async findByPostalCode(postalCode) {
+      if (postalCode === '99999999') throw new ExternalServiceUnavailableError('viacep')
+
+      return postalCode === '69005040'
+        ? { postalCode, street: 'Avenida Eduardo Ribeiro', district: 'Centro', city: 'Manaus', state: 'AM' }
+        : null
+    },
+  },
+  geocoder: {
+    async search(query) {
+      return query.includes('Eduardo Ribeiro')
+        ? [{
+            label: 'Avenida Eduardo Ribeiro, 520, Centro, Manaus, Amazonas, Brasil',
+            latitude: -3.1316,
+            longitude: -60.0234,
+            street: 'Avenida Eduardo Ribeiro',
+            number: '520',
+            district: 'Centro',
+            city: 'Manaus',
+            state: 'AM',
+            postalCode: '69005040',
+          }]
+        : []
+    },
+  },
 }
 
 async function post(url: string, payload: unknown) {
@@ -62,7 +97,9 @@ describe('API HTTP', () => {
       batchesRepository,
       institutionsRepository,
       donorsRepository: new InMemoryDonorsRepository(),
+      notificationsRepository: new InMemoryNotificationsRepository(),
       clock: () => now,
+      addressServices,
     }))
     await app.ready()
   })
@@ -104,7 +141,7 @@ describe('API HTTP', () => {
     it('POST /institutions rejeita dados inválidos com 400', async () => {
       const response = await post('/institutions', {
         ...nearNoFridge,
-        availableCapacityKg: 0,
+        storageCapacityKg: 0,
       })
 
       expect(response.statusCode).toEqual(400)
@@ -140,6 +177,42 @@ describe('API HTTP', () => {
       })
 
       expect(response.statusCode).toEqual(404)
+    })
+
+    it('PATCH /institutions/:id/stock atualiza o estoque e recalcula os dias de estoque', async () => {
+      const created = await post('/institutions', { ...nearNoFridge, stockKg: 25 })
+      const id = created.json().institution.id
+
+      // 50 pessoas × 0,5 kg = 25 kg/dia
+      expect(created.json().institution).toMatchObject({
+        peopleServed: 50,
+        dailyConsumptionKg: 25,
+        estimatedStockKg: 25,
+        stockDays: 1,
+      })
+
+      const updated = await app.inject({
+        method: 'PATCH',
+        url: `/institutions/${id}/stock`,
+        payload: { stockKg: 100 },
+      })
+      const invalid = await app.inject({
+        method: 'PATCH',
+        url: `/institutions/${id}/stock`,
+        payload: { stockKg: -1 },
+      })
+
+      expect(updated.json().institution).toMatchObject({ estimatedStockKg: 100, stockDays: 4 })
+      expect(invalid.statusCode).toBe(400)
+    })
+
+    it('POST /institutions exige pessoas atendidas', async () => {
+      const { peopleServed: _omit, ...withoutPeople } = nearNoFridge
+      const missing = await post('/institutions', withoutPeople)
+      const zero = await post('/institutions', { ...nearNoFridge, peopleServed: 0 })
+
+      expect(missing.statusCode).toBe(400)
+      expect(zero.statusCode).toBe(400)
     })
 
     it('GET /institutions lista todas, validadas ou não', async () => {
@@ -302,7 +375,7 @@ describe('API HTTP', () => {
       const stored = await batchesRepository.findById(batch.id)
       const offer = stored!.offerTo({ institutionId: far.id, score: 1, now: NOW, timeoutMinutes: 30 })
       stored!.acceptOffer(offer.id, far.id, NOW)
-      stored!.completePickup(offer.id, far.id)
+      stored!.completePickup(offer.id, far.id, NOW)
 
       const collected = await app.inject({
         method: 'GET',
@@ -345,7 +418,8 @@ describe('API HTTP', () => {
         collectedBatches: 20,
         firstChoiceViablePercent: 100,
       })
-      expect(body.timeReductionPercent).toEqual(65.3)
+      // 65,3% antes do critério de necessidade: ele troca um pouco de velocidade por priorizar quem tem menos estoque.
+      expect(body.timeReductionPercent).toEqual(64.5)
     })
 
     it('GET /comparison funciona sem dados', async () => {
@@ -470,6 +544,140 @@ describe('API HTTP', () => {
       expect((await respond(offer.id, 'pickup', first.id)).statusCode).toBe(200)
       expect((await app.inject({ method: 'GET', url: '/batches?status=COLLECTED' })).json().batches).toHaveLength(1)
       expect((await respond(offer.id, 'pickup', first.id)).statusCode).toBe(409)
+    })
+  })
+
+  describe('endereço de retirada', () => {
+    const address = {
+      street: 'Avenida Eduardo Ribeiro',
+      number: '520',
+      complement: 'loja 2',
+      district: 'Centro',
+      city: 'Manaus',
+      state: 'AM',
+      postalCode: '69005-040',
+    }
+
+    it('GET /geocoding/postal-code/:cep preenche rua, bairro, cidade e UF', async () => {
+      const found = await app.inject({ method: 'GET', url: '/geocoding/postal-code/69005-040' })
+      const missing = await app.inject({ method: 'GET', url: '/geocoding/postal-code/00000000' })
+      const invalid = await app.inject({ method: 'GET', url: '/geocoding/postal-code/123' })
+      const down = await app.inject({ method: 'GET', url: '/geocoding/postal-code/99999999' })
+
+      expect(found.json().address).toMatchObject({ street: 'Avenida Eduardo Ribeiro', city: 'Manaus', state: 'AM' })
+      expect(missing.statusCode).toBe(404)
+      expect(invalid.statusCode).toBe(400)
+      expect(down.statusCode).toBe(503)
+    })
+
+    it('GET /geocoding/search devolve endereços com coordenadas', async () => {
+      const response = await app.inject({ method: 'GET', url: '/geocoding/search?q=Av.%20Eduardo%20Ribeiro%2C%20520' })
+      const tooShort = await app.inject({ method: 'GET', url: '/geocoding/search?q=ab' })
+
+      expect(response.json().results[0]).toMatchObject({ latitude: -3.1316, longitude: -60.0234 })
+      expect(tooShort.json().results).toEqual([])
+    })
+
+    it('POST /batches guarda o endereço e o devolve formatado', async () => {
+      const response = await post('/batches', { ...batchBody, address })
+
+      expect(response.statusCode).toBe(201)
+      expect(response.json().batch.address).toEqual({
+        street: 'Avenida Eduardo Ribeiro',
+        number: '520',
+        complement: 'loja 2',
+        district: 'Centro',
+        city: 'Manaus',
+        state: 'AM',
+        postalCode: '69005-040',
+        formatted: 'Avenida Eduardo Ribeiro, 520, loja 2 - Centro, Manaus/AM, 69005-040',
+      })
+    })
+
+    it('POST /batches sem endereço continua funcionando (local marcado só no mapa)', async () => {
+      const response = await post('/batches', batchBody)
+
+      expect(response.statusCode).toBe(201)
+      expect(response.json().batch.address).toBeNull()
+    })
+
+    it('POST /batches rejeita endereço incompleto com 400', async () => {
+      const response = await post('/batches', { ...batchBody, address: { ...address, number: ' ' } })
+
+      expect(response.statusCode).toBe(400)
+    })
+  })
+
+  describe('notificações', () => {
+    async function offeredScenario() {
+      const institution = makeInstitution({ ...farWithFridge, acceptedFoodTypes: [], name: 'ONG Teste', latitude: -3.11, validated: true })
+
+      await institutionsRepository.create(institution)
+      const batch = (await post('/batches', batchBody)).json().batch
+
+      return { institution, batch }
+    }
+
+    const list = async (recipientId: string) =>
+      (await app.inject({ method: 'GET', url: `/notifications?recipientId=${recipientId}` })).json()
+
+    it('a instituição recebe a nova oferta no sininho, com contador de não lidas', async () => {
+      const { institution, batch } = await offeredScenario()
+
+      const body = await list(institution.id)
+
+      expect(body.unreadCount).toBe(1)
+      expect(body.notifications[0]).toMatchObject({
+        type: 'OFFER_RECEIVED',
+        title: 'Nova doação para você',
+        batchId: batch.id,
+        readAt: null,
+      })
+    })
+
+    it('marca uma como lida; só o destinatário pode marcar', async () => {
+      const { institution } = await offeredScenario()
+      const [notification] = (await list(institution.id)).notifications
+
+      const other = await app.inject({
+        method: 'PATCH',
+        url: `/notifications/${notification.id}/read`,
+        payload: { recipientId: 'outra-pessoa' },
+      })
+      const own = await app.inject({
+        method: 'PATCH',
+        url: `/notifications/${notification.id}/read`,
+        payload: { recipientId: institution.id },
+      })
+
+      expect(other.statusCode).toBe(403)
+      expect(own.json().notification.readAt).toBe(NOW.toISOString())
+      expect((await list(institution.id)).unreadCount).toBe(0)
+    })
+
+    it('marcar todas como lidas e aviso ao doador quando a instituição aceita', async () => {
+      const { institution } = await offeredScenario()
+      const [notification] = (await list(institution.id)).notifications
+
+      await app.inject({
+        method: 'PATCH',
+        url: `/offers/${notification.offerId}/accept`,
+        payload: { institutionId: institution.id },
+      })
+
+      const donor = await list('donor-1')
+
+      expect(donor.notifications.map((n: { type: string }) => n.type)).toEqual(['OFFER_ACCEPTED'])
+      expect(donor.notifications[0].message).toBe('ONG Teste aceitou sua doação de 18 kg de hortifruti e vai fazer a retirada.')
+
+      const marked = await app.inject({ method: 'PATCH', url: '/notifications/read-all', payload: { recipientId: 'donor-1' } })
+
+      expect(marked.json()).toEqual({ markedCount: 1 })
+      expect((await list('donor-1')).unreadCount).toBe(0)
+    })
+
+    it('exige o destinatário', async () => {
+      expect((await app.inject({ method: 'GET', url: '/notifications' })).statusCode).toBe(400)
     })
   })
 })

@@ -11,6 +11,73 @@ export type BatchStatus = 'AVAILABLE' | 'OFFERED' | 'RESERVED' | 'COLLECTED' | '
 export type OfferStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED'
 export type StrategyKey = 'multicriteria' | 'distance'
 
+export interface BatchAddress {
+  street: string
+  number: string
+  complement: string | null
+  district: string | null
+  city: string
+  state: string
+  /** Com máscara: 69005-040. */
+  postalCode: string | null
+  /** Endereço completo numa linha, pronto para exibir. */
+  formatted: string
+}
+
+export interface AddressInput {
+  street: string
+  number: string
+  complement?: string | null
+  district?: string | null
+  city: string
+  state: string
+  postalCode?: string | null
+}
+
+/** Resultado da busca por CEP (ViaCEP): sem coordenadas. */
+export interface PostalCodeAddress {
+  postalCode: string
+  street: string
+  district: string
+  city: string
+  state: string
+}
+
+/** Endereço encontrado no mapa (Nominatim). */
+export interface GeocodedAddress {
+  label: string
+  latitude: number
+  longitude: number
+  street: string | null
+  number: string | null
+  district: string | null
+  city: string | null
+  state: string | null
+  postalCode: string | null
+}
+
+export type NotificationType =
+  | 'OFFER_RECEIVED'
+  | 'OFFER_REMINDER'
+  | 'OFFER_TIMED_OUT'
+  | 'OFFER_ACCEPTED'
+  | 'OFFER_DECLINED'
+  | 'OFFER_EXPIRED'
+  | 'WAITING_FOR_INSTITUTION'
+  | 'DONATION_COLLECTED'
+  | 'BATCH_EXPIRED'
+
+export interface AppNotification {
+  id: string
+  type: NotificationType
+  title: string
+  message: string
+  batchId: string | null
+  offerId: string | null
+  createdAt: string
+  readAt: string | null
+}
+
 export interface Batch {
   id: string
   donorId: string
@@ -20,6 +87,7 @@ export interface Batch {
   storageCondition: StorageCondition
   latitude: number
   longitude: number
+  address: BatchAddress | null
   status: BatchStatus
   createdAt: string
 }
@@ -30,7 +98,16 @@ export interface Institution {
   latitude: number
   longitude: number
   hasRefrigeration: boolean
-  availableCapacityKg: number
+  /** Capacidade total de armazenamento (kg). */
+  storageCapacityKg: number
+  /** Pessoas atendidas por dia (0 = não informado). */
+  peopleServed: number
+  dailyConsumptionKg: number
+  /** Estoque estimado agora: último informado − consumo + doações retiradas. */
+  estimatedStockKg: number
+  /** Para quantos dias o estoque dá (null se o consumo não é conhecido). */
+  stockDays: number | null
+  stockUpdatedAt: string
   acceptedFoodTypes: FoodType[]
   validated: boolean
 }
@@ -41,7 +118,8 @@ export interface RankItem {
   score: number
   distanceKm: number
   travelMinutes: number
-  criteria: { proximity: number; urgency: number; compatibility: number }
+  /** need = necessidade da instituição (1 = estoque acabando). */
+  criteria: { proximity: number; urgency: number; need: number; compatibility: number }
 }
 
 export interface MatchesResponse {
@@ -78,6 +156,7 @@ export interface CreateBatchBody {
   storageCondition: StorageCondition
   latitude: number
   longitude: number
+  address?: AddressInput
 }
 
 /** Endereço da API, definido por VITE_API_URL no build. */
@@ -97,9 +176,16 @@ const MESSAGES: Record<string, string> = {
   'Offer is not in a state that allows this action.': 'Esta oferta não está em um estado que permita esta ação.',
   'Offer has expired.': 'O prazo para responder a esta oferta acabou. O lote seguiu para a próxima instituição.',
   'This offer was made to another institution.': 'Esta oferta foi feita para outra instituição.',
+  'This notification belongs to someone else.': 'Esta notificação pertence a outra conta.',
   'Resource not found.': 'Não encontrado.',
   'Batch expiration date must be in the future.': 'A validade precisa ser uma data futura.',
   'Batch quantity must be greater than zero.': 'A quantidade precisa ser maior que zero.',
+  'Address must include street, number, city and a valid state (UF).': 'Preencha rua, número, cidade e UF do endereço de retirada.',
+  'Postal code (CEP) must have 8 digits.': 'O CEP precisa ter 8 dígitos.',
+  'Address service is unavailable right now.': 'A busca de endereço está fora do ar agora. Marque o local direto no mapa.',
+  'Stock must be zero or more kilograms.': 'Informe um estoque de zero ou mais quilos.',
+  'Storage capacity must be greater than zero.': 'A capacidade de armazenamento precisa ser maior que zero.',
+  'People served per day must be a whole number greater than zero.': 'Informe quantas pessoas a instituição atende por dia.',
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -139,6 +225,25 @@ export const api = {
     request<{ institutions: Institution[] }>('/institutions').then((r) => r.institutions),
   matches: (batchId: string, strategy: StrategyKey) =>
     request<MatchesResponse>(`/batches/${batchId}/matches?strategy=${strategy}`),
+  notifications: (recipientId: string) =>
+    request<{ notifications: AppNotification[]; unreadCount: number }>(
+      `/notifications?recipientId=${encodeURIComponent(recipientId)}`,
+    ),
+  markNotificationRead: (id: string, recipientId: string) =>
+    request(`/notifications/${id}/read`, json('PATCH', { recipientId })),
+  markAllNotificationsRead: (recipientId: string) =>
+    request('/notifications/read-all', json('PATCH', { recipientId })),
+  /** CEP → rua, bairro, cidade e UF. */
+  lookupPostalCode: (cep: string) =>
+    request<{ address: PostalCodeAddress }>(`/geocoding/postal-code/${encodeURIComponent(cep)}`).then((r) => r.address),
+  /** Endereço digitado → pontos no mapa. */
+  searchAddress: (query: string) =>
+    request<{ results: GeocodedAddress[] }>(`/geocoding/search?q=${encodeURIComponent(query)}`).then((r) => r.results),
+  /** Instituição informa o estoque real; o sistema volta a estimar a partir dele. */
+  updateStock: (institutionId: string, stockKg: number) =>
+    request<{ institution: Institution }>(`/institutions/${institutionId}/stock`, json('PATCH', { stockKg })).then(
+      (r) => r.institution,
+    ),
   /** Doador: histórico de ofertas do lote. */
   batchOffers: (batchId: string) =>
     request<{ offers: Offer[] }>(`/batches/${batchId}/offers`).then((r) => r.offers),

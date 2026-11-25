@@ -34,3 +34,21 @@ export function meetsStorageRequirement(
 export function proximityScore(distance: number, config: MatchingConfig) {
   return clamp01(1 - distance / config.maxRadiusKm)
 }
+
+/**
+ * Necessidade da instituição: quanto menos dias o estoque dura, maior.
+ * 1 até `criticalStockDays`, 0 a partir de `comfortableStockDays`, linear entre os dois.
+ */
+export function needScore(stockDays: number, config: MatchingConfig) {
+  const { criticalStockDays, comfortableStockDays } = config
+
+  if (stockDays <= criticalStockDays) {
+    return 1
+  }
+
+  if (stockDays >= comfortableStockDays) {
+    return 0
+  }
+
+  return (comfortableStockDays - stockDays) / (comfortableStockDays - criticalStockDays)
+}

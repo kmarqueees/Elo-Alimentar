@@ -19,6 +19,8 @@ export interface OfferProps {
   createdAt: Date
   expiresAt: Date
   respondedAt: Date | null
+  /** Quando a instituição foi lembrada de que o prazo está acabando. */
+  remindedAt: Date | null
 }
 
 /**
@@ -40,6 +42,7 @@ export class Offer extends Entity<OfferProps> {
         createdAt: input.now,
         expiresAt: new Date(input.now.getTime() + input.timeoutMinutes * 60_000),
         respondedAt: null,
+        remindedAt: null,
       },
       id,
     )
@@ -77,6 +80,10 @@ export class Offer extends Entity<OfferProps> {
     return this.props.respondedAt
   }
 
+  get remindedAt() {
+    return this.props.remindedAt
+  }
+
   get isPending() {
     return this.props.status === 'PENDING'
   }
@@ -92,6 +99,23 @@ export class Offer extends Entity<OfferProps> {
 
   isOverdue(now: Date) {
     return this.isPending && this.props.expiresAt.getTime() <= now.getTime()
+  }
+
+  /**
+   * O lembrete é devido quando faltam `leadMinutes` ou menos, a oferta segue
+   * pendente e ainda não foi lembrada. Ofertas com prazo total menor que o
+   * aviso não recebem lembrete (seria imediato).
+   */
+  isReminderDue(now: Date, leadMinutes: number) {
+    const leadMs = leadMinutes * 60_000
+    const remaining = this.props.expiresAt.getTime() - now.getTime()
+    const window = this.props.expiresAt.getTime() - this.props.createdAt.getTime()
+
+    return this.isPending && this.props.remindedAt === null && window > leadMs && remaining > 0 && remaining <= leadMs
+  }
+
+  markReminded(now: Date) {
+    this.props.remindedAt = now
   }
 
   /** A instituição ofertada aceita dentro do prazo. */

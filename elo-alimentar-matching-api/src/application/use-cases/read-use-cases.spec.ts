@@ -60,7 +60,7 @@ describe('casos de uso de consulta', () => {
       latitude: -3.1,
       longitude: -60,
       hasRefrigeration: false,
-      availableCapacityKg: 50,
+      storageCapacityKg: 50,
       acceptedFoodTypes: [],
     }
     await institutionsRepository.create(makeInstitution({ ...base, name: 'A', validated: true }))

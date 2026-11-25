@@ -65,8 +65,12 @@ const EXPIRY_HOURS = [1, 2, 3, 6, 12, 24, 48, 72]
 
 export interface ScenarioInstitution extends RegisterInstitutionInput {
   acceptedFoodTypes: FoodType[]
+  stockKg: number
   validated: boolean
 }
+
+/** Consumo usado para gerar estoques coerentes (o mesmo da política padrão). */
+const KG_PER_PERSON_PER_DAY = 0.5
 
 export type ScenarioBatch = RegisterFoodBatchInput
 
@@ -75,9 +79,12 @@ export interface Scenario {
   batches: ScenarioBatch[]
 }
 
-/** Cria a instituição pelo fluxo do domínio (cadastro + validação do admin). */
-export function institutionFromScenario(data: ScenarioInstitution) {
-  const institution = Institution.register(data)
+/**
+ * Cria a instituição pelo fluxo do domínio (cadastro + validação do admin),
+ * com o estoque informado no instante `now`.
+ */
+export function institutionFromScenario(data: ScenarioInstitution, now: Date = SCENARIO_NOW) {
+  const institution = Institution.register(data, now)
 
   if (data.validated) {
     institution.validate()
@@ -93,17 +100,31 @@ export function batchFromScenario(data: ScenarioBatch, now: Date = SCENARIO_NOW)
 
 export function generateScenario(seed: number): Scenario {
   const random = makeRandom(seed)
+  // Gerador separado para pessoas atendidas e estoque: assim lotes e posições
+  // continuam exatamente iguais aos dos cenários anteriores a esses campos.
+  const randomStock = makeRandom(seed + 7919)
 
   const institutions: ScenarioInstitution[] = []
   const batches: ScenarioBatch[] = []
 
   for (let i = 0; i < TOTAL_INSTITUTIONS; i++) {
+    const point = randomPoint(random)
+    const freeSpaceKg = Math.round(20 + random() * 130)
+    const acceptedFoodTypes: FoodType[] = random() < 0.4 ? [] : [pick(random, ALL_FOOD_TYPES)]
+
+    const peopleServed = Math.round(30 + randomStock() * 170)
+    const stockDays = 0.3 + randomStock() * 7.7
+    const stockKg = Math.round(stockDays * peopleServed * KG_PER_PERSON_PER_DAY)
+
     institutions.push({
       name: INSTITUTION_NAMES[i] ?? `Instituição ${i + 1}`,
-      ...randomPoint(random),
+      ...point,
       hasRefrigeration: i < INSTITUTIONS_WITH_REFRIGERATION,
-      availableCapacityKg: Math.round(20 + random() * 130),
-      acceptedFoodTypes: random() < 0.4 ? [] : [pick(random, ALL_FOOD_TYPES)],
+      // O espaço livre é o mesmo de antes; a capacidade total inclui o estoque.
+      storageCapacityKg: freeSpaceKg + stockKg,
+      peopleServed,
+      stockKg,
+      acceptedFoodTypes,
       validated: true,
     })
   }

@@ -29,7 +29,9 @@ Content-Type: application/json
   "latitude": -3.110,
   "longitude": -60.0217,
   "hasRefrigeration": false,
-  "availableCapacityKg": 100
+  "storageCapacityKg": 150,
+  "peopleServed": 60,
+  "stockKg": 40
 }
 
 
@@ -43,9 +45,18 @@ Content-Type: application/json
   "latitude": -3.083,
   "longitude": -60.0217,
   "hasRefrigeration": true,
-  "availableCapacityKg": 100,
+  "storageCapacityKg": 200,
+  "peopleServed": 120,
+  "stockKg": 30,
   "acceptedFoodTypes": ["HORTIFRUTI", "LATICINIOS"]
 }
+
+
+### B2b. ONG Longe informa o estoque real (o sistema desconta o consumo diário a partir daqui)
+PATCH {{baseUrl}}/institutions/{{instFar.response.body.$.institution.id}}/stock
+Content-Type: application/json
+
+{ "stockKg": 25 }
 
 
 ### B3. O doador cadastra o lote (validade: daqui a 2 horas)
@@ -163,3 +174,29 @@ Content-Type: application/json
 
 ### C3. Lote que não existe -> 404
 GET {{baseUrl}}/batches/nao-existe
+
+
+### --- NOTIFICAÇÕES ---
+
+### N1. Sininho da ONG Longe (nova oferta, lembrete, prazo encerrado...)
+# @name notifs
+GET {{baseUrl}}/notifications?recipientId={{instFar.response.body.$.institution.id}}
+
+
+### N2. Sininho do doador (aceita, recusada, retirada, vencida...)
+GET {{baseUrl}}/notifications?recipientId={{donorId}}
+
+
+### N3. Marcar uma notificação como lida
+PATCH {{baseUrl}}/notifications/{{notifs.response.body.$.notifications[0].id}}/read
+Content-Type: application/json
+
+{ "recipientId": "{{instFar.response.body.$.institution.id}}" }
+
+
+### N4. Marcar todas as notificações do doador como lidas
+PATCH {{baseUrl}}/notifications/read-all
+Content-Type: application/json
+
+{ "recipientId": "{{donorId}}" }
+

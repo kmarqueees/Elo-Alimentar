@@ -4,7 +4,9 @@ import {
 } from '@/domain/institution/institution'
 import type { InstitutionsRepository } from '@/domain/institution/institutions-repository'
 
-type RegisterInstitutionUseCaseRequest = RegisterInstitutionInput
+interface RegisterInstitutionUseCaseRequest extends RegisterInstitutionInput {
+  now: Date
+}
 
 interface RegisterInstitutionUseCaseResponse {
   institution: Institution
@@ -13,10 +15,11 @@ interface RegisterInstitutionUseCaseResponse {
 export class RegisterInstitutionUseCase {
   constructor(private institutionsRepository: InstitutionsRepository) {}
 
-  async execute(
-    request: RegisterInstitutionUseCaseRequest,
-  ): Promise<RegisterInstitutionUseCaseResponse> {
-    const institution = Institution.register(request)
+  async execute({
+    now,
+    ...input
+  }: RegisterInstitutionUseCaseRequest): Promise<RegisterInstitutionUseCaseResponse> {
+    const institution = Institution.register(input, now)
 
     await this.institutionsRepository.create(institution)
 

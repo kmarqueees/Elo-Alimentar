@@ -19,7 +19,7 @@ describe('Validate Institution Use Case', () => {
       latitude: -3.1,
       longitude: -60,
       hasRefrigeration: true,
-      availableCapacityKg: 50,
+      storageCapacityKg: 50,
       acceptedFoodTypes: [],
       validated: false,
     })
@@ -37,7 +37,7 @@ describe('Validate Institution Use Case', () => {
       latitude: -3.1,
       longitude: -60,
       hasRefrigeration: true,
-      availableCapacityKg: 50,
+      storageCapacityKg: 50,
       acceptedFoodTypes: [],
       validated: true,
     })

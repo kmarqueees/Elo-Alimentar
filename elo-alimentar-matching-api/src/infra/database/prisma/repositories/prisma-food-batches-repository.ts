@@ -12,9 +12,14 @@ import {
 } from '../mappers/prisma-food-batch-mapper'
 
 /** Estado do agregado no momento em que foi lido do banco. */
+interface OfferSnapshot {
+  status: OfferStatus
+  remindedAt: number | null
+}
+
 interface Snapshot {
   status: BatchStatus
-  offers: Map<string, OfferStatus>
+  offers: Map<string, OfferSnapshot>
 }
 
 /**
@@ -57,6 +62,10 @@ export class PrismaFoodBatchesRepository implements FoodBatchesRepository {
     return this.findManyWhere({ status: { in: ['AVAILABLE', 'OFFERED'] } })
   }
 
+  async findManyWithOpenOffers() {
+    return this.findManyWhere({ status: { in: ['OFFERED', 'RESERVED'] } })
+  }
+
   async findManyOfferedTo(institutionId: string) {
     return this.findManyWhere({ offers: { some: { institution_id: institutionId } } })
   }
@@ -90,20 +99,26 @@ export class PrismaFoodBatchesRepository implements FoodBatchesRepository {
       }
 
       for (const offer of batch.offers) {
-        const previousStatus = snapshot?.offers.get(offer.id)
+        const previous = snapshot?.offers.get(offer.id)
 
-        if (previousStatus === undefined) {
+        if (previous === undefined) {
           await tx.offer.create({ data: PrismaOfferMapper.toPersistence(offer) })
           continue
         }
 
-        if (previousStatus === offer.status) {
+        const remindedAt = offer.remindedAt?.getTime() ?? null
+
+        if (previous.status === offer.status && previous.remindedAt === remindedAt) {
           continue
         }
 
         const updated = await tx.offer.updateMany({
-          where: { id: offer.id, status: previousStatus },
-          data: { status: offer.status, responded_at: offer.respondedAt },
+          where: { id: offer.id, status: previous.status },
+          data: {
+            status: offer.status,
+            responded_at: offer.respondedAt,
+            reminded_at: offer.remindedAt,
+          },
         })
 
         if (updated.count === 0) {
@@ -136,7 +151,12 @@ export class PrismaFoodBatchesRepository implements FoodBatchesRepository {
   private remember(batch: FoodBatch) {
     this.snapshots.set(batch, {
       status: batch.status,
-      offers: new Map(batch.offers.map((offer) => [offer.id, offer.status])),
+      offers: new Map(
+        batch.offers.map((offer) => [
+          offer.id,
+          { status: offer.status, remindedAt: offer.remindedAt?.getTime() ?? null },
+        ]),
+      ),
     })
   }
 }

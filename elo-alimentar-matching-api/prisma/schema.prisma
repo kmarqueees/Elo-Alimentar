@@ -61,15 +61,21 @@ model User {
 }
 
 model Institution {
-  id                    String     @id @default(uuid())
-  name                  String
-  latitude              Float
-  longitude             Float
-  has_refrigeration     Boolean    @default(false)
-  available_capacity_kg Float
-  accepted_food_types   FoodType[]
-  validated             Boolean    @default(false)
-  created_at            DateTime   @default(now())
+  id                  String     @id @default(uuid())
+  name                String
+  latitude            Float
+  longitude           Float
+  has_refrigeration   Boolean    @default(false)
+  /// Capacidade total de armazenamento (kg).
+  storage_capacity_kg Float
+  /// Pessoas atendidas por dia. 0 = desconhecido (registros anteriores a esta coluna).
+  people_served       Int        @default(0)
+  /// Estoque conhecido no instante stock_updated_at (kg).
+  stock_kg            Float      @default(0)
+  stock_updated_at    DateTime   @default(now())
+  accepted_food_types FoodType[]
+  validated           Boolean    @default(false)
+  created_at          DateTime   @default(now())
 
   user    User?   @relation(fields: [user_id], references: [id])
   user_id String? @unique
@@ -80,15 +86,25 @@ model Institution {
 }
 
 model FoodBatch {
-  id                String           @id @default(uuid())
-  food_type         FoodType
-  quantity_kg       Float
-  expires_at        DateTime
-  storage_condition StorageCondition
-  latitude          Float
-  longitude         Float
-  status            BatchStatus      @default(AVAILABLE)
-  created_at        DateTime         @default(now())
+  id                  String           @id @default(uuid())
+  food_type           FoodType
+  quantity_kg         Float
+  expires_at          DateTime
+  storage_condition   StorageCondition
+  latitude            Float
+  longitude           Float
+  /// Endereço de retirada (opcional: lotes podem ser marcados só pelo mapa).
+  address_street      String?
+  address_number      String?
+  address_complement  String?
+  address_district    String?
+  address_city        String?
+  /// UF com 2 letras.
+  address_state       String?          @db.Char(2)
+  /// CEP só com os 8 dígitos.
+  address_postal_code String?          @db.Char(8)
+  status              BatchStatus      @default(AVAILABLE)
+  created_at          DateTime         @default(now())
 
   donor    User   @relation(fields: [donor_id], references: [id])
   donor_id String
@@ -108,6 +124,8 @@ model Offer {
   created_at   DateTime    @default(now())
   expires_at   DateTime
   responded_at DateTime?   @map("confirmed_at")
+  /// Quando a instituição foi lembrada de que o prazo de resposta está acabando.
+  reminded_at  DateTime?
 
   batch    FoodBatch @relation(fields: [batch_id], references: [id])
   batch_id String
@@ -118,4 +136,39 @@ model Offer {
   @@index([batch_id])
   @@index([institution_id])
   @@map("reservations")
+}
+
+enum NotificationRecipient {
+  INSTITUTION
+  DONOR
+}
+
+enum NotificationType {
+  OFFER_RECEIVED
+  OFFER_REMINDER
+  OFFER_TIMED_OUT
+  OFFER_ACCEPTED
+  OFFER_DECLINED
+  OFFER_EXPIRED
+  WAITING_FOR_INSTITUTION
+  DONATION_COLLECTED
+  BATCH_EXPIRED
+}
+
+/// Notificações no app (sininho) para instituições e doadores.
+/// Sem chave estrangeira: o destinatário pode ser uma instituição ou um usuário doador.
+model Notification {
+  id             String                @id @default(uuid())
+  recipient_type NotificationRecipient
+  recipient_id   String
+  type           NotificationType
+  title          String
+  message        String
+  batch_id       String?
+  offer_id       String?
+  created_at     DateTime              @default(now())
+  read_at        DateTime?
+
+  @@index([recipient_id, created_at])
+  @@map("notifications")
 }

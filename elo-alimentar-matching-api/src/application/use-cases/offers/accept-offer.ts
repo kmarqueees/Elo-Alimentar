@@ -1,3 +1,4 @@
+import type { DomainEventPublisher } from '@/core/events/domain-event-publisher'
 import { ResourceNotFoundError } from '@/core/errors/resource-not-found-error'
 import type { FoodBatchesRepository } from '@/domain/food-batch/food-batches-repository'
 import type { Offer } from '@/domain/food-batch/offer'
@@ -10,7 +11,10 @@ interface AcceptOfferUseCaseRequest {
 
 /** A instituição ofertada aceita o lote dentro do prazo e passa a ser responsável pela retirada. */
 export class AcceptOfferUseCase {
-  constructor(private batchesRepository: FoodBatchesRepository) {}
+  constructor(
+    private batchesRepository: FoodBatchesRepository,
+    private events: DomainEventPublisher,
+  ) {}
 
   async execute({
     offerId,
@@ -26,6 +30,7 @@ export class AcceptOfferUseCase {
     const offer = batch.acceptOffer(offerId, institutionId, now)
 
     await this.batchesRepository.save(batch)
+    await this.events.publish(batch.pullDomainEvents())
 
     return { offer }
   }
